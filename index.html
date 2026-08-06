@@ -135,7 +135,7 @@
     .ptitle{font-size:20px;font-weight:800;line-height:1.2}
     .pmeta{font-size:12px;color:#64748b}
     .pdate{margin-left:auto;font-size:13px;color:#64748b;text-align:right}
-    .pcli{font-size:15px;margin-bottom:14px}
+    .pcli{font-size:14px;margin-bottom:16px;line-height:1.7;background:#f8fafc;border-radius:10px;padding:12px 16px}
     .ptab{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:13px}
     .ptab th{text-align:left;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;padding:6px 8px}
     .ptab td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
@@ -156,14 +156,30 @@
   </header>
 
   <div class="card">
-    <p class="eyebrow">Ruta</p>
+    <p class="eyebrow">Cliente</p>
     <div class="field">
-      <label class="lab" for="cliente">Cliente</label>
-      <input type="text" id="cliente" placeholder="Nombre del cliente" autocomplete="off">
+      <label class="lab" for="cotizNum">N&deg; de cotizaci&oacute;n</label>
+      <input type="number" id="cotizNum" min="1" inputmode="numeric">
     </div>
     <div class="field">
+      <label class="lab" for="cliente">Nombre / Raz&oacute;n social</label>
+      <input type="text" id="cliente" placeholder="Nombre del cliente" autocomplete="off">
+    </div>
+    <div class="row2" style="margin-bottom:14px">
+      <div><label class="lab" for="cuit">CUIT / DNI</label><input type="text" id="cuit" placeholder="20-12345678-9" autocomplete="off"></div>
+      <div><label class="lab" for="tel">Tel&eacute;fono</label><input type="text" id="tel" placeholder="11 5555-5555" autocomplete="off"></div>
+    </div>
+    <div class="field">
+      <label class="lab" for="mail">Mail</label>
+      <input type="email" id="mail" placeholder="cliente@correo.com" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Ruta</p>
+    <div class="field">
       <label class="lab" for="baseDir">Base <span style="color:var(--muted);font-weight:400">(d&oacute;nde vive el cami&oacute;n)</span></label>
-      <input type="text" id="baseDir" placeholder="Direcci&oacute;n de la base" autocomplete="off">
+      <input type="text" id="baseDir" placeholder="Direcci&oacute;n de la base" value="Villa Lugano, CABA" autocomplete="off">
     </div>
     <div class="field">
       <label class="lab" for="partidaDir">Punto de partida <span style="color:var(--muted);font-weight:400">(si sale de otro lado)</span></label>
@@ -422,11 +438,21 @@
     Q={ kmTotal:kmTotal, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido };
   }
 
+  // ---- Numeración de cotización (memoria del navegador) ----
+  var COTIZ_KEY="lar_cotiz_num";
+  function pad4(n){ n=String(n); while(n.length<4) n="0"+n; return n; }
+  function getNum(){ try{ var n=parseInt(localStorage.getItem(COTIZ_KEY)); return (isNaN(n)||n<1)?1:n; }catch(e){ return 1; } }
+  function setNum(n){ try{ localStorage.setItem(COTIZ_KEY,String(n)); }catch(e){} }
+
   // ---- Descargar cotización (PDF vía impresión) ----
   function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
   function descargarCotizacion(){
     if(!Q || Q.kmTotal<=0){ alert("Cargá primero un viaje (con km) para generar la cotización."); return; }
     var cliente=($("cliente").value||"").trim();
+    var cuit=($("cuit").value||"").trim();
+    var tel=($("tel").value||"").trim();
+    var mail=($("mail").value||"").trim();
+    var cotizId="LAR-"+pad4(parseInt($("cotizNum").value)||getNum());
     var fp=num("finalPrice");
     var total=fp>0?fp:Q.sugerido;
     var hoy=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
@@ -444,9 +470,14 @@
       add("Frío / refrigerado",Q.frio); add("Backhaul (vuelta cargada)",Q.backhaul); add("Paradas ("+Q.numParadas+")",Q.paradasR);
       add("Espera ("+Q.esperas+")",Q.esperaR); add("Noches ("+Q.noches+")",Q.nocheR); add("Peaje",Q.peaje);
     } else { det+='<tr><td>Servicio de transporte (ruta detallada arriba)</td><td class="r">'+fmt(total)+'</td></tr>'; }
+    var cinfo="";
+    if(cliente) cinfo+='<div><b>Cliente:</b> '+esc(cliente)+'</div>';
+    if(cuit)    cinfo+='<div><b>CUIT / DNI:</b> '+esc(cuit)+'</div>';
+    if(tel)     cinfo+='<div><b>Teléfono:</b> '+esc(tel)+'</div>';
+    if(mail)    cinfo+='<div><b>Mail:</b> '+esc(mail)+'</div>';
     var html='<div class="pdoc">'+
-      '<div class="phead"><div class="plogo">LAR</div><div><div class="ptitle">Cotización de transporte</div><div class="pmeta">LAR · Logística refrigerada</div></div><div class="pdate">'+hoy+'</div></div>'+
-      (cliente?'<div class="pcli"><b>Cliente:</b> '+esc(cliente)+'</div>':'')+
+      '<div class="phead"><div class="plogo">LAR</div><div><div class="ptitle">Cotización de transporte</div><div class="pmeta">LAR · Logística refrigerada</div></div><div class="pdate"><b>'+cotizId+'</b><br>'+hoy+'</div></div>'+
+      (cinfo?'<div class="pcli">'+cinfo+'</div>':'')+
       '<table class="ptab"><thead><tr><th></th><th>Dirección</th><th>Km</th><th>Carga</th></tr></thead><tbody>'+rt+'</tbody></table>'+
       '<table class="pdet"><tbody>'+det+'</tbody></table>'+
       '<div class="ptot"><span>Total</span><span>'+fmt(total)+'</span></div>'+
@@ -464,7 +495,10 @@
   $("reset").addEventListener("click", function(){ for(var k in defaults){ $(k).value=defaults[k]; } compute(); });
   $("newQuote").addEventListener("click", function(){
     destinos=[nuevoDestino(0)];
-    $("cliente").value=""; $("baseDir").value=""; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
+    var _nn=(parseInt($("cotizNum").value)||0)+1; $("cotizNum").value=_nn; setNum(_nn);
+    $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value="";
+    baseLL=null; partidaLL=null;
+    $("baseDir").value="Villa Lugano, CABA"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
     $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
     Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
     Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
@@ -564,6 +598,8 @@
     }catch(e){ setMsg("No pudo cargar Google Maps: "+(e.message||e)); }
   })();
 
+  $("cotizNum").value=getNum();
+  $("cotizNum").addEventListener("input", function(){ var n=parseInt(this.value); if(!isNaN(n)&&n>0) setNum(n); });
   destinos=[nuevoDestino(0)];
   renderDestinos();
 })();
