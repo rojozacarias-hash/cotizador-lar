@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LAR — Calculadora</title>
+<style>
+  :root{
+    --bg:#F4F6FA; --card:#FFFFFF; --ink:#0F1B2D; --muted:#647087;
+    --line:#E4E9F0; --line-soft:#EEF2F7; --field:#F8FAFC;
+    --accent:#0797B8; --accent-ink:#065E73; --accent-soft:rgba(7,151,184,.10);
+    --ok:#0E9F6E; --warn:#C2830B; --bad:#DA3B34;
+    --refri:#0797B8; --frio:#4257C4;
+    --floor-bg:#FCF3E4; --floor-ink:#7A5312;
+    --sh-sm:0 1px 2px rgba(15,27,45,.05);
+    --sh:0 1px 2px rgba(15,27,45,.04),0 6px 16px rgba(15,27,45,.06);
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.45;-webkit-font-smoothing:antialiased;padding:22px 16px calc(44px + env(safe-area-inset-bottom))}
+  .wrap{max-width:480px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+  .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-ink));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;letter-spacing:-.02em;box-shadow:var(--sh-sm)}
+  .htxt h1{font-size:18px;font-weight:800;letter-spacing:-.01em;margin:0}
+  .htxt p{margin:1px 0 0;font-size:12.5px;color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:var(--sh-sm)}
+  .eyebrow{font-size:10.5px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  label.lab{display:block;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:6px}
+  input[type=text],input[type=number],input[type=date],input[type=time],select{
+    width:100%;border:1px solid var(--line);border-radius:11px;padding:12px 13px;font-family:inherit;font-size:15px;color:var(--ink);background:var(--field);-webkit-appearance:none;appearance:none;transition:border-color .15s,box-shadow .15s}
+  input[type=number]{font-family:var(--mono);font-weight:600}
+  input::placeholder{color:#9AA6B8}
+  input:focus,select:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:#fff}
+  .row2{display:flex;gap:10px} .row2>div{flex:1;min-width:0}
+  .base-note{font-size:11.5px;color:var(--accent-ink);background:var(--accent-soft);border-radius:10px;padding:9px 11px;margin-top:10px}
+  /* segmented */
+  .seg{display:flex;gap:3px;background:var(--line-soft);border-radius:11px;padding:3px}
+  .seg button{flex:1;min-width:0;border:0;background:transparent;padding:9px 4px;border-radius:8px;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s;white-space:nowrap}
+  .seg button.on{background:#fff;color:var(--ink);box-shadow:var(--sh-sm)}
+  .seg button.on[data-v=refri]{color:var(--refri)} .seg button.on[data-v=frio]{color:var(--frio)}
+  .seg button.on[data-v=cargada]{color:var(--accent-ink)}
+  /* checks */
+  .checks{display:flex;gap:10px;margin-top:12px}
+  .chk{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;user-select:none;border:1px solid var(--line);border-radius:10px;padding:9px 4px;transition:.15s}
+  .chk input{display:none}
+  .chk.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+  /* destino */
+  .destino{border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:11px;background:linear-gradient(180deg,#FCFDFF,#F8FAFD)}
+  .dhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+  .dnum{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--accent-ink)}
+  .del{border:0;background:none;color:#AAB4C4;font-size:20px;cursor:pointer;line-height:1;padding:0 4px}
+  .del:hover{color:var(--bad)}
+  .addbtn{display:block;width:100%;padding:13px;border:1.5px dashed #B9D9E2;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px}
+  .addbtn:active{background:rgba(7,151,184,.18)}
+  .vuelta.off{opacity:.45;pointer-events:none}
+  .hidden{display:none !important}
+  .swrow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .swrow .swlab{font-size:14px;font-weight:600}
+  .swrow .swlab span{display:block;font-size:11.5px;font-weight:400;color:var(--muted);margin-top:1px}
+  .toggle{position:relative;width:48px;height:28px;flex:0 0 auto}
+  .toggle input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .track{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:background .18s}
+  .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.28);transition:transform .18s}
+  .toggle input:checked + .track{background:var(--accent)}
+  .toggle input:checked + .track + .knob{transform:translateX(20px)}
+  /* result */
+  .result{border:1px solid var(--line);box-shadow:var(--sh);overflow:hidden;padding:0}
+  .rtop{padding:18px 18px 16px;background:linear-gradient(180deg,#fff,#FBFDFE)}
+  .price-lab{font-size:10.5px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin:0}
+  .price-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 2px}
+  .price{font-family:var(--mono);font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1}
+  .badge{flex:0 0 auto;font-size:12px;font-weight:800;padding:7px 12px;border-radius:99px;white-space:nowrap}
+  .badge.ok{background:rgba(14,159,110,.13);color:var(--ok)}
+  .badge.warn{background:rgba(194,131,11,.15);color:var(--warn)}
+  .badge.bad{background:rgba(218,59,52,.13);color:var(--bad)}
+  .badge.neutral{background:var(--line-soft);color:var(--muted)}
+  .formula{font-size:12px;color:var(--muted);margin:8px 0 0}
+  .break{padding:14px 18px;border-top:1px solid var(--line-soft)}
+  .line{display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0}
+  .line .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+  .line.add .k{color:var(--accent-ink)}
+  .line.tot{border-top:1px solid var(--line-soft);margin-top:5px;padding-top:10px;font-weight:800}
+  .line.tot .v{font-weight:800}
+  .floor{margin:0 18px 16px;background:var(--floor-bg);color:var(--floor-ink);border-radius:12px;padding:13px 15px}
+  .floor .top{display:flex;justify-content:space-between;align-items:baseline}
+  .floor .top .k{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+  .floor .top .v{font-family:var(--mono);font-size:20px;font-weight:800}
+  .floor .sub{margin:6px 0 0;font-size:11px;opacity:.9;font-family:var(--mono)}
+  .final{margin:0 18px 18px;border-top:1px dashed var(--line);padding-top:15px}
+  .final>label{display:block;font-size:12.5px;font-weight:600;margin-bottom:8px}
+  .final-input{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:11px;padding:0 13px;background:var(--field)}
+  .final-input .cur{font-family:var(--mono);font-size:20px;color:var(--muted)}
+  .final-input input{flex:1;min-width:0;border:0;font-family:var(--mono);font-size:20px;font-weight:700;color:var(--ink);background:transparent;padding:12px 0}
+  .final-input:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:#fff}
+  .final-read{margin-top:10px;font-size:12.5px;min-height:16px;font-weight:600}
+  .final-read.ok{color:var(--ok)} .final-read.warn{color:var(--warn)} .final-read.bad{color:var(--bad)}
+  .final-read .hint{color:var(--muted);font-weight:400}
+  details{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--sh-sm)}
+  summary{list-style:none;cursor:pointer;padding:16px 18px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+  summary::-webkit-details-marker{display:none}
+  summary .chev{transition:transform .2s;color:var(--muted)}
+  details[open] summary .chev{transform:rotate(180deg)}
+  .params{padding:0 18px 18px;border-top:1px solid var(--line-soft)}
+  .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:14px}
+  .p{display:flex;flex-direction:column}
+  .p label{font-size:11px;color:var(--muted);margin-bottom:4px}
+  .p input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-family:var(--mono);font-size:14px;background:var(--field);width:100%}
+  .preset{font-size:12px;color:var(--accent-ink);background:none;border:0;padding:10px 0 0;cursor:pointer;font-family:inherit;text-decoration:underline}
+  .newquote{display:block;width:100%;margin:2px 0 14px;padding:15px;border:0;border-radius:13px;background:var(--accent);color:#fff;font-family:inherit;font-size:15px;font-weight:800;letter-spacing:-.01em;cursor:pointer;box-shadow:0 4px 14px rgba(7,151,184,.28)}
+  .newquote:active{background:var(--accent-ink)}
+  .foot{font-size:11px;color:var(--muted);text-align:center;margin-top:18px;line-height:1.6}
+  .mapbtn{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:var(--accent-ink);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px}
+  .mapmsg{font-size:12px;color:var(--muted);text-align:center;margin-top:8px;min-height:15px}
+  .pac-container{z-index:2147483647 !important;font-family:var(--sans)}
+  .pac-icon{display:none !important}
+  .pac-item{padding:9px 12px;font-size:14px;cursor:pointer}.pac-item-query{font-size:14px}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">LAR</div>
+    <div class="htxt"><h1>Calculadora de cotizaci&oacute;n</h1><p>Arm&aacute; la ruta y sac&aacute; el precio en segundos.</p></div>
+  </header>
+
+  <div class="card">
+    <p class="eyebrow">Ruta</p>
+    <div class="field">
+      <label class="lab" for="baseDir">Base <span style="color:var(--muted);font-weight:400">(d&oacute;nde vive el cami&oacute;n)</span></label>
+      <input type="text" id="baseDir" placeholder="Direcci&oacute;n de la base" autocomplete="off">
+    </div>
+    <div class="field">
+      <label class="lab" for="partidaDir">Punto de partida <span style="color:var(--muted);font-weight:400">(si sale de otro lado)</span></label>
+      <input type="text" id="partidaDir" placeholder="Dej&aacute; vac&iacute;o si sale de la base" autocomplete="off">
+    </div>
+    <div class="swrow"><span class="swlab">Solo ida <span>Viaje encadenado &mdash; no cobra la vuelta</span></span><span class="toggle"><input type="checkbox" id="soloIda"><span class="track"></span><span class="knob"></span></span></div>
+    <div class="base-note">Hasta 60&nbsp;km a la redonda no se cobra extra.</div>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Destinos</p>
+    <div id="destinos"></div>
+    <button type="button" class="addbtn" id="addDest">+ Agregar destino</button>
+    <button type="button" class="mapbtn" id="calcKm">🗺️ Calcular km con Google Maps</button>
+    <div class="mapmsg" id="mapmsg"></div>
+  </div>
+
+  <div class="card vuelta" id="vueltaCard">
+    <p class="eyebrow">Vuelta a base</p>
+    <div class="row2" style="margin-bottom:12px">
+      <div><label class="lab">Km (hasta la base)</label><input type="number" id="vKm" inputmode="numeric" min="0" value="0"></div>
+      <div><label class="lab">&iquest;C&oacute;mo vuelve?</label>
+        <div class="seg" id="vEstadoSeg">
+          <button type="button" data-v="vacia" class="on">Vac&iacute;a</button>
+          <button type="button" data-v="cargada">Cargada</button>
+        </div>
+      </div>
+    </div>
+    <div class="field hidden" id="vTipoWrap">
+      <label class="lab">Carga de la vuelta</label>
+      <div class="seg" id="vTipoSeg">
+        <button type="button" data-v="seco" class="on">Seco</button>
+        <button type="button" data-v="refri">Refrigerado</button>
+        <button type="button" data-v="frio">Fr&iacute;o</button>
+      </div>
+    </div>
+    <div class="checks">
+      <label class="chk" id="vNocheChk"><input type="checkbox" id="vNoche"> &#127765; Pernocte</label>
+      <label class="chk" id="vEsperaChk"><input type="checkbox" id="vEspera"> &#9203; Espera</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Extras</p>
+    <div class="row2">
+      <div><label class="lab">Peaje del viaje $</label><input type="number" id="peajeViaje" inputmode="numeric" min="0" value="0"></div>
+      <div><label class="lab">Paradas no previstas</label><input type="number" id="par" inputmode="numeric" min="0" value="0"></div>
+    </div>
+  </div>
+
+  <div class="card result">
+    <div class="rtop">
+      <p class="price-lab">Precio sugerido</p>
+      <div class="price-row"><div class="price" id="price">$0</div><div class="badge neutral" id="badge">&mdash;</div></div>
+      <p class="formula" id="formula"></p>
+    </div>
+    <div class="break" id="break"></div>
+    <div class="floor">
+      <div class="top"><span class="k">Piso (costo real)</span><span class="v" id="floor">$0</span></div>
+      <p class="sub" id="floorSub"></p>
+    </div>
+    <div class="final">
+      <label for="finalPrice">Tu precio (el que vas a cobrar)</label>
+      <div class="final-input"><span class="cur">$</span><input id="finalPrice" type="number" inputmode="numeric" min="0" placeholder="0"></div>
+      <div class="final-read" id="finalRead"></div>
+    </div>
+  </div>
+
+  <button type="button" class="newquote" id="newQuote">Nueva cotizaci&oacute;n</button>
+
+  <details>
+    <summary>Par&aacute;metros ajustables <span class="chev">&#9662;</span></summary>
+    <div class="params">
+      <div class="pgrid">
+        <div class="p"><label>M&iacute;nimo $</label><input type="number" id="p-min" value="400000"></div>
+        <div class="p"><label>$/km (sobre corte)</label><input type="number" id="p-km" value="1700"></div>
+        <div class="p"><label>Km corte (gratis)</label><input type="number" id="p-corte" value="60"></div>
+        <div class="p"><label>Refrigerado $/km</label><input type="number" id="p-refri" value="150"></div>
+        <div class="p"><label>Fr&iacute;o &minus;18&deg; $/km</label><input type="number" id="p-frio" value="220"></div>
+        <div class="p"><label>Backhaul (vuelta) $/km</label><input type="number" id="p-backhaul" value="850"></div>
+        <div class="p"><label>Noche $/pernocte</label><input type="number" id="p-noche" value="75000"></div>
+        <div class="p"><label>Espera $/parada</label><input type="number" id="p-espera" value="30000"></div>
+        <div class="p"><label>Parada fija $</label><input type="number" id="p-parada-fijo" value="35000"></div>
+        <div class="p"><label>Parada $/km</label><input type="number" id="p-parada-km" value="50"></div>
+        <div class="p"><label>Gasoil $/litro</label><input type="number" id="p-gasoil" value="2099"></div>
+        <div class="p"><label>Consumo L/100km</label><input type="number" id="p-consumo" value="24"></div>
+        <div class="p"><label>Desgaste $/km</label><input type="number" id="p-desgaste" value="180"></div>
+        <div class="p"><label>Chofer $/mes</label><input type="number" id="p-chofer" value="2900000"></div>
+        <div class="p"><label>Fijos oper. $/mes</label><input type="number" id="p-fijos" value="267198"></div>
+        <div class="p"><label>Comercial $/mes</label><input type="number" id="p-comercial" value="740000"></div>
+        <div class="p"><label>Viajes/mes</label><input type="number" id="p-viajes" value="8.8"></div>
+      </div>
+      <button class="preset" id="reset">Restablecer valores base</button>
+    </div>
+  </details>
+
+  <p class="foot">Precio = m&iacute;nimo + $/km arriba de 60 km + fr&iacute;o + backhaul + paradas + espera + noches + peaje.<br>Piso = costo real. Este c&aacute;lculo no se guarda: carg&aacute; el viaje en Notion.</p>
+</div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+  var num=function(id){var v=parseFloat($(id).value);return isNaN(v)?0:v;};
+  var fmt=function(n){return "$"+Math.round(n).toLocaleString("es-AR");};
+  var defaults={"p-min":400000,"p-km":1700,"p-corte":60,"p-refri":150,"p-frio":220,"p-backhaul":850,"p-noche":75000,"p-espera":30000,"p-parada-fijo":35000,"p-parada-km":50,"p-gasoil":2099,"p-consumo":24,"p-desgaste":180,"p-chofer":2900000,"p-fijos":267198,"p-comercial":740000,"p-viajes":8.8};
+  function line(k,v,add){return '<div class="line'+(add?' add':'')+'"><span class="k">'+k+'</span><span class="v">'+fmt(v)+'</span></div>';}
+
+  var destinos=[];
+  function nuevoDestino(km){ return {dir:"",fecha:"",hora:"",km:(km||0),tipo:"seco",noche:false,espera:false,ll:null}; }
+
+  function segHtml(id,f,val,opts){
+    var h='<div class="seg" data-i="'+id+'" data-f="'+f+'">';
+    opts.forEach(function(o){ h+='<button type="button" data-v="'+o[0]+'"'+(val==o[0]?' class="on"':'')+'>'+o[1]+'</button>'; });
+    return h+'</div>';
+  }
+
+  function renderDestinos(){
+    var cont=$("destinos"); cont.innerHTML="";
+    destinos.forEach(function(d,i){
+      var el=document.createElement("div"); el.className="destino";
+      el.innerHTML=
+        '<div class="dhead"><span class="dnum">Destino '+(i+1)+'</span>'+
+          (destinos.length>1 ? '<button type="button" class="del" data-del="'+i+'" aria-label="Quitar">&times;</button>' : '')+'</div>'+
+        '<div class="field"><label class="lab">Direcci&oacute;n</label><input type="text" data-i="'+i+'" data-f="dir" value="'+(d.dir||"")+'" placeholder="Direcci&oacute;n del destino" autocomplete="off"></div>'+
+        '<div class="row2" style="margin-bottom:14px">'+
+          '<div><label class="lab">Fecha</label><input type="date" data-i="'+i+'" data-f="fecha" value="'+(d.fecha||"")+'"></div>'+
+          '<div><label class="lab">Hora</label><input type="time" data-i="'+i+'" data-f="hora" value="'+(d.hora||"")+'"></div>'+
+        '</div>'+
+        '<div class="field"><label class="lab">Km (desde punto anterior)</label><input type="number" inputmode="numeric" min="0" data-i="'+i+'" data-f="km" value="'+(d.km||0)+'"></div>'+
+        '<div class="field"><label class="lab">Carga en este tramo</label>'+segHtml(i,"tipo",d.tipo,[["seco","Seco"],["refri","Refrigerado"],["frio","Frío"]])+'</div>'+
+        '<div class="checks">'+
+          '<label class="chk'+(d.noche?" on":"")+'"><input type="checkbox" data-i="'+i+'" data-f="noche"'+(d.noche?" checked":"")+'> &#127765; Pernocte</label>'+
+          '<label class="chk'+(d.espera?" on":"")+'"><input type="checkbox" data-i="'+i+'" data-f="espera"'+(d.espera?" checked":"")+'> &#9203; Espera</label>'+
+        '</div>';
+      cont.appendChild(el);
+    });
+    setupAC();
+    compute();
+  }
+
+  // destinos: inputs + checks + seg + delete (delegación)
+  $("destinos").addEventListener("input", function(e){
+    var t=e.target, i=t.getAttribute("data-i"), f=t.getAttribute("data-f");
+    if(i===null||t.tagName!="INPUT") return; i=+i;
+    if(f=="noche"||f=="espera"){ destinos[i][f]=t.checked; t.closest(".chk").classList.toggle("on",t.checked); }
+    else if(f=="km") destinos[i].km=parseFloat(t.value)||0;
+    else { destinos[i][f]=t.value; if(f=="dir") destinos[i].ll=null; }
+    compute();
+  });
+  $("destinos").addEventListener("click", function(e){
+    var del=e.target.getAttribute("data-del");
+    if(del!==null){ destinos.splice(+del,1); if(destinos.length===0) destinos.push(nuevoDestino(0)); renderDestinos(); return; }
+    var seg=e.target.closest(".seg");
+    if(seg && e.target.tagName=="BUTTON"){
+      var i=+seg.getAttribute("data-i"), v=e.target.getAttribute("data-v");
+      destinos[i].tipo=v;
+      Array.prototype.forEach.call(seg.children,function(btn){ btn.classList.toggle("on",btn===e.target); });
+      compute();
+    }
+  });
+  $("addDest").addEventListener("click", function(){ destinos.push(nuevoDestino(0)); renderDestinos(); });
+
+  // vuelta seg controls
+  var vEstado="vacia", vTipo="seco";
+  $("vEstadoSeg").addEventListener("click", function(e){
+    if(e.target.tagName!="BUTTON") return;
+    vEstado=e.target.getAttribute("data-v");
+    Array.prototype.forEach.call(this.children,function(b){ b.classList.toggle("on",b===e.target); });
+    $("vTipoWrap").classList.toggle("hidden",vEstado!="cargada");
+    compute();
+  });
+  $("vTipoSeg").addEventListener("click", function(e){
+    if(e.target.tagName!="BUTTON") return;
+    vTipo=e.target.getAttribute("data-v");
+    Array.prototype.forEach.call(this.children,function(b){ b.classList.toggle("on",b===e.target); });
+    compute();
+  });
+  $("vNoche").addEventListener("change", function(){ $("vNocheChk").classList.toggle("on",this.checked); compute(); });
+  $("vEspera").addEventListener("change", function(){ $("vEsperaChk").classList.toggle("on",this.checked); compute(); });
+  $("soloIda").addEventListener("change", function(){ $("vueltaCard").classList.toggle("off",this.checked); compute(); });
+
+  function recargoTipo(tipo,km){ if(tipo=="refri") return km*num("p-refri"); if(tipo=="frio") return km*num("p-frio"); return 0; }
+
+  function compute(){
+    var corte=num("p-corte"), mn=num("p-min"), pkm=num("p-km");
+    var soloIda=$("soloIda").checked;
+    var kmTotal=0, frio=0, noches=0, esperas=0;
+    destinos.forEach(function(d){
+      kmTotal+=(+d.km||0); frio+=recargoTipo(d.tipo,(+d.km||0));
+      if(d.noche) noches++; if(d.espera) esperas++;
+    });
+    var backhaul=0;
+    if(!soloIda){
+      var vKm=num("vKm"); kmTotal+=vKm;
+      if(vEstado=="cargada"){ frio+=recargoTipo(vTipo,vKm); backhaul=vKm*num("p-backhaul"); }
+      if($("vNoche").checked) noches++;
+      if($("vEspera").checked) esperas++;
+    }
+
+    var b=$("badge");
+    if(kmTotal<=0){
+      $("price").textContent="$0"; b.className="badge neutral"; b.textContent="—";
+      $("formula").textContent="Cargá los km del viaje para cotizar.";
+      $("break").innerHTML=""; $("floor").textContent="—"; $("floorSub").textContent="";
+      var fr0=$("finalRead"); fr0.className="final-read"; fr0.innerHTML='<span class="hint">Cargá el viaje y te muestro el margen.</span>';
+      return;
+    }
+
+    var kmCobrable=Math.max(0,kmTotal-corte);
+    var base=mn+pkm*kmCobrable;
+    var nocheR=noches*num("p-noche");
+    var esperaR=esperas*num("p-espera");
+    var numParadas=Math.max(0,destinos.length-1)+num("par");
+    var paradaUnit=num("p-parada-fijo")+num("p-parada-km")*kmTotal;
+    var paradasR=numParadas*paradaUnit;
+    var peaje=num("peajeViaje");
+    var sugerido=base+frio+backhaul+nocheR+esperaR+paradasR+peaje;
+
+    var varKm=num("p-gasoil")*num("p-consumo")/100+num("p-desgaste");
+    var costoVar=varKm*kmTotal, reefer=frio;
+    var viajes=num("p-viajes")||1;
+    var fijosViaje=(num("p-chofer")+num("p-fijos")+num("p-comercial"))/viajes;
+    var piso=costoVar+reefer+fijosViaje+peaje;
+    var margen=sugerido>0 ? (sugerido-piso)/sugerido*100 : 0;
+
+    $("price").textContent=fmt(sugerido);
+    b.className=margen>=35?"badge ok":(margen>=20?"badge warn":"badge bad");
+    b.textContent="Margen "+margen.toFixed(0)+"%";
+    $("formula").textContent=kmTotal<=corte ? ("Ruta "+kmTotal+" km · dentro de "+corte+" km (mínimo)") : ("Ruta "+kmTotal+" km · "+fmt(mn)+" + "+fmt(pkm)+" × "+kmCobrable+" km");
+
+    var rows="";
+    rows+=line("Precio base ("+kmTotal+" km)",base,false);
+    if(frio)     rows+=line("Frío / refrigerado",frio,true);
+    if(backhaul) rows+=line("Backhaul vuelta cargada",backhaul,true);
+    if(paradasR) rows+=line("Paradas ("+numParadas+")",paradasR,true);
+    if(esperaR)  rows+=line("Espera ("+esperas+")",esperaR,true);
+    if(nocheR)   rows+=line("Noches ("+noches+")",nocheR,true);
+    if(peaje)    rows+=line("Peaje",peaje,true);
+    rows+='<div class="line tot"><span class="k">Precio sugerido</span><span class="v">'+fmt(sugerido)+'</span></div>';
+    $("break").innerHTML=rows;
+
+    $("floor").textContent=fmt(piso);
+    $("floorSub").textContent="variable "+fmt(costoVar)+(reefer?" · frío "+fmt(reefer):"")+" · fijos+chofer "+fmt(fijosViaje)+(peaje?" · peaje "+fmt(peaje):"");
+
+    var fp=num("finalPrice"), fr=$("finalRead");
+    if(fp<=0){ fr.className="final-read"; fr.innerHTML='<span class="hint">Si ponés tu precio, te digo el margen y si supera el piso.</span>'; }
+    else{
+      var dd=fp-piso, m=fp>0?(dd/fp*100):0;
+      if(dd>=0){ fr.className="final-read "+(m>=35?"ok":"warn"); fr.textContent="Margen "+m.toFixed(0)+"% · "+fmt(dd)+" sobre el piso"; }
+      else{ fr.className="final-read bad"; fr.textContent="⚠ "+fmt(Math.abs(dd))+" bajo el piso — pierde plata"; }
+    }
+  }
+
+  ["baseDir","partidaDir","vKm","peajeViaje","par","finalPrice","p-min","p-km","p-corte","p-refri","p-frio","p-backhaul","p-noche","p-espera","p-parada-fijo","p-parada-km","p-gasoil","p-consumo","p-desgaste","p-chofer","p-fijos","p-comercial","p-viajes"].forEach(function(id){
+    $(id).addEventListener("input",compute); $(id).addEventListener("change",compute);
+  });
+
+  $("reset").addEventListener("click", function(){ for(var k in defaults){ $(k).value=defaults[k]; } compute(); });
+  $("newQuote").addEventListener("click", function(){
+    // ---- Google Maps ----
+  var mapsReady=false, baseLL=null, partidaLL=null;
+  function setMsg(t){ var m=$("mapmsg"); if(m) m.textContent=t; }
+  function setupAC(){
+    if(!mapsReady||!window.google||!google.maps||!google.maps.places) return;
+    function attach(inp,cb){ if(!inp||inp.__ac) return; try{ var ac=new google.maps.places.Autocomplete(inp,{componentRestrictions:{country:"ar"},fields:["geometry"]}); ac.addListener("place_changed",function(){ var p=ac.getPlace(); cb(p&&p.geometry?p.geometry.location:null); }); inp.__ac=true; }catch(e){} }
+    attach($("baseDir"),function(ll){baseLL=ll;});
+    attach($("partidaDir"),function(ll){partidaLL=ll;});
+    document.querySelectorAll('#destinos input[data-f="dir"]').forEach(function(inp){ var i=+inp.getAttribute("data-i"); attach(inp,function(ll){ if(destinos[i]) destinos[i].ll=ll; }); });
+  }
+  window.__larMapsCB=function(){ mapsReady=true; setMsg("Escribí una dirección y elegí de la lista."); setupAC(); };
+  $("calcKm").addEventListener("click", function(){
+    if(!mapsReady){ setMsg("El mapa todavía está cargando…"); return; }
+    var start=baseLL||partidaLL||($("partidaDir").value||$("baseDir").value||"").trim();
+    if(!start){ setMsg("⚠️ Poné la Base o el Punto de partida."); return; }
+    var pts=[start], ok=true;
+    destinos.forEach(function(d){ var v=d.ll||(d.dir||"").trim(); if(!v) ok=false; pts.push(v); });
+    if(!ok){ setMsg("⚠️ Faltan direcciones de destino."); return; }
+    var soloIda=$("soloIda").checked;
+    if(!soloIda){ var bb=baseLL||($("baseDir").value||"").trim(); if(!bb){ setMsg("⚠️ Poné la dirección de la Base (para la vuelta)."); return; } pts.push(bb); }
+    var origins=pts.slice(0,pts.length-1), dests=pts.slice(1);
+    setMsg("Calculando km…");
+    try{ new google.maps.DistanceMatrixService().getDistanceMatrix({origins:origins,destinations:dests,travelMode:google.maps.TravelMode.DRIVING}, function(res,status){
+      if(status!=="OK"||!res){ setMsg("No pude calcular ("+status+")."); return; }
+      for(var i=0;i<origins.length;i++){ var el=res.rows[i].elements[i]; if(!el||el.status!=="OK"){ setMsg("No encontré ruta en un tramo."); return; } var km=Math.round(el.distance.value/1000); if(i<destinos.length){ destinos[i].km=km; var inp=document.querySelector('#destinos input[data-f="km"][data-i="'+i+'"]'); if(inp) inp.value=km; } else $("vKm").value=km; }
+      setMsg("✅ Km calculados desde el mapa."); compute();
+    }); }catch(e){ setMsg("Error con el mapa: "+e.message); }
+  });
+  $("baseDir").addEventListener("input", function(){ baseLL=null; });
+  $("partidaDir").addEventListener("input", function(){ partidaLL=null; });
+  if(window.google&&window.google.maps){ window.__larMapsCB(); }
+  else if(!document.getElementById("lar-gmaps")){ var gs=document.createElement("script"); gs.id="lar-gmaps"; gs.async=true; gs.src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBbnBKihgJmLcnp4Vp510NWNstyZ4_Rtxl&libraries=places&language=es-419&region=AR&callback=__larMapsCB"; document.head.appendChild(gs); }
+
+  destinos=[nuevoDestino(0)];
+    $("baseDir").value=""; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
+    $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
+    Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
+    Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
+    $("vNoche").checked=false; $("vEspera").checked=false; $("vNocheChk").classList.remove("on"); $("vEsperaChk").classList.remove("on");
+    $("peajeViaje").value=0; $("par").value=0; $("finalPrice").value="";
+    renderDestinos(); window.scrollTo({top:0,behavior:"smooth"});
+  });
+
+  destinos=[nuevoDestino(0)];
+  renderDestinos();
+})();
+</script>
+</body>
+</html>
