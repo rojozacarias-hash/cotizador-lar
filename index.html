@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LAR — Calculadora</title>
+<link rel="icon" href="data:,">
 <style>
   :root{
     --bg:#F4F6FA; --card:#FFFFFF; --ink:#0F1B2D; --muted:#647087;
@@ -391,7 +392,17 @@
 
   $("reset").addEventListener("click", function(){ for(var k in defaults){ $(k).value=defaults[k]; } compute(); });
   $("newQuote").addEventListener("click", function(){
-    // ---- Google Maps ----
+    destinos=[nuevoDestino(0)];
+    $("baseDir").value=""; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
+    $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
+    Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
+    Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
+    $("vNoche").checked=false; $("vEspera").checked=false; $("vNocheChk").classList.remove("on"); $("vEsperaChk").classList.remove("on");
+    $("peajeViaje").value=0; $("par").value=0; $("finalPrice").value="";
+    renderDestinos(); window.scrollTo({top:0,behavior:"smooth"});
+  });
+
+  // ---- Google Maps ----
   var mapsReady=false, baseLL=null, partidaLL=null;
   function setMsg(t){ var m=$("mapmsg"); if(m) m.textContent=t; }
   function setupAC(){
@@ -423,16 +434,6 @@
   $("partidaDir").addEventListener("input", function(){ partidaLL=null; });
   if(window.google&&window.google.maps){ window.__larMapsCB(); }
   else if(!document.getElementById("lar-gmaps")){ var gs=document.createElement("script"); gs.id="lar-gmaps"; gs.async=true; gs.src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBbnBKihgJmLcnp4Vp510NWNstyZ4_Rtxl&libraries=places&language=es-419&region=AR&callback=__larMapsCB"; document.head.appendChild(gs); }
-
-  destinos=[nuevoDestino(0)];
-    $("baseDir").value=""; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
-    $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
-    Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
-    Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
-    $("vNoche").checked=false; $("vEspera").checked=false; $("vNocheChk").classList.remove("on"); $("vEsperaChk").classList.remove("on");
-    $("peajeViaje").value=0; $("par").value=0; $("finalPrice").value="";
-    renderDestinos(); window.scrollTo({top:0,behavior:"smooth"});
-  });
 
   destinos=[nuevoDestino(0)];
   renderDestinos();
