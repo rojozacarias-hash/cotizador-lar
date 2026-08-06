@@ -122,6 +122,30 @@
   #acdd .acm{font-size:14px;color:#0f172a;font-weight:600}
   #acdd .acs{font-size:12px;color:#64748b}
   @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+  #printArea{display:none}
+  @media print{
+    @page{margin:14mm}
+    body{background:#fff !important}
+    .wrap{display:none !important}
+    #acdd{display:none !important}
+    #printArea{display:block !important}
+    .pdoc{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;max-width:720px;margin:0 auto}
+    .phead{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0f172a;padding-bottom:14px;margin-bottom:18px}
+    .plogo{width:56px;height:56px;border-radius:12px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
+    .ptitle{font-size:20px;font-weight:800;line-height:1.2}
+    .pmeta{font-size:12px;color:#64748b}
+    .pdate{margin-left:auto;font-size:13px;color:#64748b;text-align:right}
+    .pcli{font-size:15px;margin-bottom:14px}
+    .ptab{width:100%;border-collapse:collapse;margin-bottom:18px;font-size:13px}
+    .ptab th{text-align:left;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;padding:6px 8px}
+    .ptab td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+    .ptab .pt{font-weight:700;white-space:nowrap}
+    .pdet{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:14px}
+    .pdet td{padding:6px 8px;border-bottom:1px solid #f8fafc}
+    .pdet td.r{text-align:right;white-space:nowrap}
+    .ptot{display:flex;justify-content:space-between;align-items:center;background:#0f172a;color:#fff;padding:14px 18px;border-radius:12px;font-size:20px;font-weight:800}
+    .pfoot{margin-top:22px;font-size:11px;color:#94a3b8;text-align:center;line-height:1.7}
+  }
 </style>
 </head>
 <body>
@@ -133,6 +157,10 @@
 
   <div class="card">
     <p class="eyebrow">Ruta</p>
+    <div class="field">
+      <label class="lab" for="cliente">Cliente</label>
+      <input type="text" id="cliente" placeholder="Nombre del cliente" autocomplete="off">
+    </div>
     <div class="field">
       <label class="lab" for="baseDir">Base <span style="color:var(--muted);font-weight:400">(d&oacute;nde vive el cami&oacute;n)</span></label>
       <input type="text" id="baseDir" placeholder="Direcci&oacute;n de la base" autocomplete="off">
@@ -202,6 +230,7 @@
       <div class="final-input"><span class="cur">$</span><input id="finalPrice" type="number" inputmode="numeric" min="0" placeholder="0"></div>
       <div class="final-read" id="finalRead"></div>
     </div>
+    <button type="button" class="mapbtn" id="downloadBtn" style="margin-top:16px">&#128196; Descargar cotizaci&oacute;n (PDF)</button>
   </div>
 
   <button type="button" class="newquote" id="newQuote">Nueva cotizaci&oacute;n</button>
@@ -234,6 +263,7 @@
 
   <p class="foot">Precio = m&iacute;nimo + $/km arriba de 60 km + fr&iacute;o + backhaul + paradas + espera + noches + peaje.<br>Piso = costo real. Este c&aacute;lculo no se guarda: carg&aacute; el viaje en Notion.</p>
 </div>
+<div id="printArea"></div>
 
 <script>
 (function(){
@@ -241,6 +271,7 @@
   var num=function(id){var v=parseFloat($(id).value);return isNaN(v)?0:v;};
   var fmt=function(n){return "$"+Math.round(n).toLocaleString("es-AR");};
   var defaults={"p-min":400000,"p-km":1700,"p-corte":60,"p-refri":150,"p-frio":220,"p-backhaul":850,"p-noche":75000,"p-espera":30000,"p-parada-fijo":35000,"p-parada-km":50,"p-gasoil":2099,"p-consumo":24,"p-desgaste":180,"p-chofer":2900000,"p-fijos":267198,"p-comercial":740000,"p-viajes":8.8};
+  var Q=null; // última cotización calculada (para el PDF)
   function line(k,v,add){return '<div class="line'+(add?' add':'')+'"><span class="k">'+k+'</span><span class="v">'+fmt(v)+'</span></div>';}
 
   var destinos=[];
@@ -336,6 +367,7 @@
 
     var b=$("badge");
     if(kmTotal<=0){
+      Q=null;
       $("price").textContent="$0"; b.className="badge neutral"; b.textContent="—";
       $("formula").textContent="Cargá los km del viaje para cotizar.";
       $("break").innerHTML=""; $("floor").textContent="—"; $("floorSub").textContent="";
@@ -386,7 +418,44 @@
       if(dd>=0){ fr.className="final-read "+(m>=35?"ok":"warn"); fr.textContent="Margen "+m.toFixed(0)+"% · "+fmt(dd)+" sobre el piso"; }
       else{ fr.className="final-read bad"; fr.textContent="⚠ "+fmt(Math.abs(dd))+" bajo el piso — pierde plata"; }
     }
+
+    Q={ kmTotal:kmTotal, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido };
   }
+
+  // ---- Descargar cotización (PDF vía impresión) ----
+  function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];}); }
+  function descargarCotizacion(){
+    if(!Q || Q.kmTotal<=0){ alert("Cargá primero un viaje (con km) para generar la cotización."); return; }
+    var cliente=($("cliente").value||"").trim();
+    var fp=num("finalPrice");
+    var total=fp>0?fp:Q.sugerido;
+    var hoy=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
+    var soloIda=$("soloIda").checked;
+    var tipoTxt=function(t){ return t=="frio"?"Congelado −18°":(t=="refri"?"Refrigerado":"Seco"); };
+    var salida=($("partidaDir").value||"").trim()||($("baseDir").value||"").trim()||"—";
+    var rt='<tr><td class="pt">Salida</td><td>'+esc(salida)+'</td><td></td><td></td></tr>';
+    destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td><td>'+(dd.km||0)+' km</td><td>'+tipoTxt(dd.tipo)+'</td></tr>'; });
+    if(!soloIda){ var vk=num("vKm"); var vt=(vEstado=="cargada")?("cargada · "+tipoTxt(vTipo)):"vacía"; rt+='<tr><td class="pt">Vuelta a base</td><td>'+esc($("baseDir").value||"—")+'</td><td>'+vk+' km</td><td>'+vt+'</td></tr>'; }
+    else { rt+='<tr><td class="pt">Modalidad</td><td>Solo ida (viaje encadenado)</td><td></td><td></td></tr>'; }
+    var det="";
+    if(fp<=0){
+      var add=function(k,v){ if(v) det+='<tr><td>'+k+'</td><td class="r">'+fmt(v)+'</td></tr>'; };
+      det+='<tr><td>Precio base ('+Q.kmTotal+' km)</td><td class="r">'+fmt(Q.base)+'</td></tr>';
+      add("Frío / refrigerado",Q.frio); add("Backhaul (vuelta cargada)",Q.backhaul); add("Paradas ("+Q.numParadas+")",Q.paradasR);
+      add("Espera ("+Q.esperas+")",Q.esperaR); add("Noches ("+Q.noches+")",Q.nocheR); add("Peaje",Q.peaje);
+    } else { det+='<tr><td>Servicio de transporte (ruta detallada arriba)</td><td class="r">'+fmt(total)+'</td></tr>'; }
+    var html='<div class="pdoc">'+
+      '<div class="phead"><div class="plogo">LAR</div><div><div class="ptitle">Cotización de transporte</div><div class="pmeta">LAR · Logística refrigerada</div></div><div class="pdate">'+hoy+'</div></div>'+
+      (cliente?'<div class="pcli"><b>Cliente:</b> '+esc(cliente)+'</div>':'')+
+      '<table class="ptab"><thead><tr><th></th><th>Dirección</th><th>Km</th><th>Carga</th></tr></thead><tbody>'+rt+'</tbody></table>'+
+      '<table class="pdet"><tbody>'+det+'</tbody></table>'+
+      '<div class="ptot"><span>Total</span><span>'+fmt(total)+'</span></div>'+
+      '<div class="pfoot">Cotización orientativa, sujeta a confirmación. Validez 7 días desde la fecha.<br>LAR · Transporte refrigerado</div>'+
+      '</div>';
+    $("printArea").innerHTML=html;
+    window.print();
+  }
+  $("downloadBtn").addEventListener("click", descargarCotizacion);
 
   ["baseDir","partidaDir","vKm","peajeViaje","par","finalPrice","p-min","p-km","p-corte","p-refri","p-frio","p-backhaul","p-noche","p-espera","p-parada-fijo","p-parada-km","p-gasoil","p-consumo","p-desgaste","p-chofer","p-fijos","p-comercial","p-viajes"].forEach(function(id){
     $(id).addEventListener("input",compute); $(id).addEventListener("change",compute);
@@ -395,7 +464,7 @@
   $("reset").addEventListener("click", function(){ for(var k in defaults){ $(k).value=defaults[k]; } compute(); });
   $("newQuote").addEventListener("click", function(){
     destinos=[nuevoDestino(0)];
-    $("baseDir").value=""; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
+    $("cliente").value=""; $("baseDir").value=""; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
     $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
     Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
     Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
