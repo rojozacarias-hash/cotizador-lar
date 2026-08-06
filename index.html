@@ -115,9 +115,12 @@
   .foot{font-size:11px;color:var(--muted);text-align:center;margin-top:18px;line-height:1.6}
   .mapbtn{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:var(--accent-ink);color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px}
   .mapmsg{font-size:12px;color:var(--muted);text-align:center;margin-top:8px;min-height:15px}
-  .pac-container{z-index:2147483647 !important;font-family:var(--sans)}
-  .pac-icon{display:none !important}
-  .pac-item{padding:9px 12px;font-size:14px;cursor:pointer}.pac-item-query{font-size:14px}
+  #acdd{position:absolute;z-index:2147483647;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 30px rgba(2,6,23,.16);overflow:hidden auto;max-height:280px;font-family:var(--sans)}
+  #acdd .acrow{padding:10px 14px;cursor:pointer;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid #f1f5f9}
+  #acdd .acrow:last-child{border-bottom:none}
+  #acdd .acrow:hover,#acdd .acrow.on{background:#f1f5f9}
+  #acdd .acm{font-size:14px;color:#0f172a;font-weight:600}
+  #acdd .acs{font-size:12px;color:#64748b}
   @media (prefers-reduced-motion:reduce){*{transition:none !important}}
 </style>
 </head>
@@ -269,7 +272,6 @@
         '</div>';
       cont.appendChild(el);
     });
-    setupAC();
     compute();
   }
 
@@ -279,7 +281,7 @@
     if(i===null||t.tagName!="INPUT") return; i=+i;
     if(f=="noche"||f=="espera"){ destinos[i][f]=t.checked; t.closest(".chk").classList.toggle("on",t.checked); }
     else if(f=="km") destinos[i].km=parseFloat(t.value)||0;
-    else { destinos[i][f]=t.value; if(f=="dir") destinos[i].ll=null; }
+    else { destinos[i][f]=t.value; if(f=="dir"){ destinos[i].ll=null; queueFetch(t, t.value, (function(idx,inp){ return function(place){ if(destinos[idx]){ destinos[idx].dir=inp.value; destinos[idx].ll=place.location||null; } compute(); }; })(i,t)); } }
     compute();
   });
   $("destinos").addEventListener("click", function(e){
@@ -402,19 +404,66 @@
     renderDestinos(); window.scrollTo({top:0,behavior:"smooth"});
   });
 
-  // ---- Google Maps ----
-  var mapsReady=false, baseLL=null, partidaLL=null;
+  // ---- Google Maps (API nueva: Places Autocomplete Data + Distance Matrix) ----
+  var GKEY="AIzaSyBbnBKihgJmLcnp4Vp510NWNstyZ4_RtxI";
+  var gmapsReady=false, baseLL=null, partidaLL=null;
+  var ACtor=null, tokenCtor=null, DM=null, TM="DRIVING", acToken=null;
   function setMsg(t){ var m=$("mapmsg"); if(m) m.textContent=t; }
-  function setupAC(){
-    if(!mapsReady||!window.google||!google.maps||!google.maps.places) return;
-    function attach(inp,cb){ if(!inp||inp.__ac) return; try{ var ac=new google.maps.places.Autocomplete(inp,{componentRestrictions:{country:"ar"},fields:["geometry"]}); ac.addListener("place_changed",function(){ var p=ac.getPlace(); cb(p&&p.geometry?p.geometry.location:null); }); inp.__ac=true; }catch(e){} }
-    attach($("baseDir"),function(ll){baseLL=ll;});
-    attach($("partidaDir"),function(ll){partidaLL=ll;});
-    document.querySelectorAll('#destinos input[data-f="dir"]').forEach(function(inp){ var i=+inp.getAttribute("data-i"); attach(inp,function(ll){ if(destinos[i]) destinos[i].ll=ll; }); });
+
+  // dropdown propio de sugerencias (compartido)
+  var acdd=document.createElement("div"); acdd.id="acdd"; acdd.style.display="none"; document.body.appendChild(acdd);
+  var acInput=null, acTimer=null;
+  function hideDD(){ acdd.style.display="none"; acInput=null; }
+  function positionDD(inp){ var r=inp.getBoundingClientRect(); acdd.style.left=(r.left+window.scrollX)+"px"; acdd.style.top=(r.bottom+window.scrollY+4)+"px"; acdd.style.width=r.width+"px"; }
+
+  function queueFetch(inp, text, onSelect){
+    clearTimeout(acTimer);
+    if(!gmapsReady||!ACtor){ return; }
+    if(!text || text.trim().length<3){ hideDD(); return; }
+    acTimer=setTimeout(function(){ fetchSug(inp, text.trim(), onSelect); }, 260);
   }
-  window.__larMapsCB=function(){ mapsReady=true; setMsg("Escribí una dirección y elegí de la lista."); setupAC(); };
+  async function fetchSug(inp, text, onSelect){
+    acInput=inp;
+    if(!acToken) acToken=new tokenCtor();
+    try{
+      var res=await ACtor.fetchAutocompleteSuggestions({ input:text, includedRegionCodes:["ar"], language:"es-419", region:"ar", sessionToken:acToken });
+      var sug=(res&&res.suggestions)||[];
+      if(acInput!==inp) return;
+      acdd.innerHTML="";
+      if(!sug.length){ hideDD(); return; }
+      sug.slice(0,6).forEach(function(s){
+        var pred=s.placePrediction; if(!pred) return;
+        var main=(pred.mainText&&pred.mainText.text)||(pred.text&&pred.text.text)||"";
+        var sec=(pred.secondaryText&&pred.secondaryText.text)||"";
+        var row=document.createElement("div"); row.className="acrow";
+        var ms=document.createElement("span"); ms.className="acm"; ms.textContent=main; row.appendChild(ms);
+        if(sec){ var ss=document.createElement("span"); ss.className="acs"; ss.textContent=sec; row.appendChild(ss); }
+        row.addEventListener("mousedown", function(ev){ ev.preventDefault(); pickSug(pred, inp, onSelect); });
+        acdd.appendChild(row);
+      });
+      positionDD(inp); acdd.style.display="block";
+    }catch(e){ setMsg("Error autocompletar: "+(e.message||e)); hideDD(); }
+  }
+  async function pickSug(pred, inp, onSelect){
+    try{
+      var place=pred.toPlace();
+      await place.fetchFields({ fields:["location","formattedAddress"] });
+      inp.value=place.formattedAddress||(pred.text&&pred.text.text)||inp.value;
+      onSelect(place);
+      acToken=null; // cierra la sesión de facturación
+    }catch(e){ setMsg("Error al elegir dirección: "+(e.message||e)); }
+    hideDD();
+  }
+  document.addEventListener("click", function(e){ if(acInput && e.target!==acInput && !acdd.contains(e.target)) hideDD(); });
+  window.addEventListener("scroll", function(){ if(acInput) positionDD(acInput); }, true);
+
+  // base / partida
+  $("baseDir").addEventListener("input", function(){ baseLL=null; queueFetch(this, this.value, function(place){ baseLL=place.location||null; }); });
+  $("partidaDir").addEventListener("input", function(){ partidaLL=null; queueFetch(this, this.value, function(place){ partidaLL=place.location||null; }); });
+
+  // calcular km (Distance Matrix, acepta LatLng o texto)
   $("calcKm").addEventListener("click", function(){
-    if(!mapsReady){ setMsg("El mapa todavía está cargando…"); return; }
+    if(!gmapsReady||!DM){ setMsg("El mapa todavía está cargando…"); return; }
     var start=baseLL||partidaLL||($("partidaDir").value||$("baseDir").value||"").trim();
     if(!start){ setMsg("⚠️ Poné la Base o el Punto de partida."); return; }
     var pts=[start], ok=true;
@@ -424,16 +473,27 @@
     if(!soloIda){ var bb=baseLL||($("baseDir").value||"").trim(); if(!bb){ setMsg("⚠️ Poné la dirección de la Base (para la vuelta)."); return; } pts.push(bb); }
     var origins=pts.slice(0,pts.length-1), dests=pts.slice(1);
     setMsg("Calculando km…");
-    try{ new google.maps.DistanceMatrixService().getDistanceMatrix({origins:origins,destinations:dests,travelMode:google.maps.TravelMode.DRIVING}, function(res,status){
-      if(status!=="OK"||!res){ setMsg("No pude calcular ("+status+")."); return; }
+    DM.getDistanceMatrix({origins:origins,destinations:dests,travelMode:TM}).then(function(res){
+      if(!res||!res.rows){ setMsg("No pude calcular la distancia."); return; }
       for(var i=0;i<origins.length;i++){ var el=res.rows[i].elements[i]; if(!el||el.status!=="OK"){ setMsg("No encontré ruta en un tramo."); return; } var km=Math.round(el.distance.value/1000); if(i<destinos.length){ destinos[i].km=km; var inp=document.querySelector('#destinos input[data-f="km"][data-i="'+i+'"]'); if(inp) inp.value=km; } else $("vKm").value=km; }
       setMsg("✅ Km calculados desde el mapa."); compute();
-    }); }catch(e){ setMsg("Error con el mapa: "+e.message); }
+    }).catch(function(e){ setMsg("No pude calcular: "+(e.message||e)); });
   });
-  $("baseDir").addEventListener("input", function(){ baseLL=null; });
-  $("partidaDir").addEventListener("input", function(){ partidaLL=null; });
-  if(window.google&&window.google.maps){ window.__larMapsCB(); }
-  else if(!document.getElementById("lar-gmaps")){ var gs=document.createElement("script"); gs.id="lar-gmaps"; gs.async=true; gs.src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBbnBKihgJmLcnp4Vp510NWNstyZ4_Rtxl&libraries=places&language=es-419&region=AR&callback=__larMapsCB"; document.head.appendChild(gs); }
+
+  // loader nuevo (dynamic library import) + init async
+  (function(g){var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=function(){return h||(h=new Promise(async function(f,n){a=m.createElement("script");e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,function(t){return "_"+t[0].toLowerCase();}),g[k]);e.set("callback",c+".maps."+q);a.src="https://maps."+c+"apis.com/maps/api/js?"+e;d[q]=f;a.onerror=function(){h=n(Error(p+" could not load."));};m.head.append(a);}));};d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=function(f){for(var _len=arguments.length,n=new Array(_len>1?_len-1:0),_key=1;_key<_len;_key++){n[_key-1]=arguments[_key];}return r.add(f)&&u().then(function(){return d[l].apply(d,[f].concat(n));});}})({ key:GKEY, v:"weekly", language:"es-419", region:"AR" });
+
+  (async function(){
+    try{
+      var places=await google.maps.importLibrary("places");
+      ACtor=places.AutocompleteSuggestion; tokenCtor=places.AutocompleteSessionToken;
+      var routes=await google.maps.importLibrary("routes");
+      DM=new routes.DistanceMatrixService();
+      if(google.maps.TravelMode&&google.maps.TravelMode.DRIVING) TM=google.maps.TravelMode.DRIVING;
+      gmapsReady=true;
+      setMsg("Escribí una dirección y elegí de la lista.");
+    }catch(e){ setMsg("No pudo cargar Google Maps: "+(e.message||e)); }
+  })();
 
   destinos=[nuevoDestino(0)];
   renderDestinos();
