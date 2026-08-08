@@ -122,6 +122,12 @@
   #acdd .acm{font-size:14px;color:#0f172a;font-weight:600}
   #acdd .acs{font-size:12px;color:#64748b}
   @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+  .mixrow{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+  .mixrow>div{flex:1;min-width:0}
+  .mixrow input{width:100%}
+  .lab2{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600}
+  .secohint{flex:0 0 auto;text-align:center;font-size:10px;color:var(--muted);background:#f1f5f9;border-radius:10px;padding:9px 12px;line-height:1.3;font-weight:600}
+  .secohint b{display:block;font-size:15px;color:#0f172a;font-weight:800;margin-top:2px}
   #printArea{display:none}
   @media print{
     @page{margin:14mm}
@@ -291,7 +297,7 @@
   function line(k,v,add){return '<div class="line'+(add?' add':'')+'"><span class="k">'+k+'</span><span class="v">'+fmt(v)+'</span></div>';}
 
   var destinos=[];
-  function nuevoDestino(km){ return {dir:"",fecha:"",hora:"",km:(km||0),tipo:"seco",noche:false,espera:false,ll:null}; }
+  function nuevoDestino(km){ return {dir:"",fecha:"",hora:"",km:(km||0),refriPct:0,frioPct:0,noche:false,espera:false,ll:null}; }
 
   function segHtml(id,f,val,opts){
     var h='<div class="seg" data-i="'+id+'" data-f="'+f+'">';
@@ -312,7 +318,18 @@
           '<div><label class="lab">Hora</label><input type="time" data-i="'+i+'" data-f="hora" value="'+(d.hora||"")+'"></div>'+
         '</div>'+
         '<div class="field"><label class="lab">Km (desde punto anterior)</label><input type="number" inputmode="numeric" min="0" data-i="'+i+'" data-f="km" value="'+(d.km||0)+'"></div>'+
-        '<div class="field"><label class="lab">Carga en este tramo</label>'+segHtml(i,"tipo",d.tipo,[["seco","Seco"],["refri","Refrigerado"],["frio","Frío"]])+'</div>'+
+        '<div class="field"><label class="lab">Carga en este tramo <span style="color:var(--muted);font-weight:400">&mdash; pod&eacute;s mezclar</span></label>'+
+          '<div class="seg mixseg" data-i="'+i+'">'+
+            '<button type="button" data-mix="0,0"'+((+d.refriPct||0)==0&&(+d.frioPct||0)==0?' class="on"':'')+'>Seco</button>'+
+            '<button type="button" data-mix="100,0"'+((+d.refriPct||0)==100&&(+d.frioPct||0)==0?' class="on"':'')+'>Refrigerado</button>'+
+            '<button type="button" data-mix="0,100"'+((+d.refriPct||0)==0&&(+d.frioPct||0)==100?' class="on"':'')+'>Congelado</button>'+
+          '</div>'+
+          '<div class="mixrow">'+
+            '<div><label class="lab2">Refrig. %</label><input type="number" inputmode="numeric" min="0" max="100" data-i="'+i+'" data-f="refriPct" value="'+(+d.refriPct||0)+'"></div>'+
+            '<div><label class="lab2">Congelado %</label><input type="number" inputmode="numeric" min="0" max="100" data-i="'+i+'" data-f="frioPct" value="'+(+d.frioPct||0)+'"></div>'+
+            '<div class="secohint">Seco<br><b>'+Math.max(0,100-(+d.refriPct||0)-(+d.frioPct||0))+'%</b></div>'+
+          '</div>'+
+        '</div>'+
         '<div class="checks">'+
           '<label class="chk'+(d.noche?" on":"")+'"><input type="checkbox" data-i="'+i+'" data-f="noche"'+(d.noche?" checked":"")+'> &#127765; Pernocte</label>'+
           '<label class="chk'+(d.espera?" on":"")+'"><input type="checkbox" data-i="'+i+'" data-f="espera"'+(d.espera?" checked":"")+'> &#9203; Espera</label>'+
@@ -328,6 +345,11 @@
     if(i===null||t.tagName!="INPUT") return; i=+i;
     if(f=="noche"||f=="espera"){ destinos[i][f]=t.checked; t.closest(".chk").classList.toggle("on",t.checked); }
     else if(f=="km") destinos[i].km=parseFloat(t.value)||0;
+    else if(f=="refriPct"||f=="frioPct"){
+      destinos[i][f]=Math.max(0,Math.min(100,parseFloat(t.value)||0));
+      var sh=t.closest(".field").querySelector(".secohint b");
+      if(sh) sh.textContent=Math.max(0,100-(+destinos[i].refriPct||0)-(+destinos[i].frioPct||0))+"%";
+    }
     else { destinos[i][f]=t.value; if(f=="dir"){ destinos[i].ll=null; queueFetch(t, t.value, (function(idx,inp){ return function(place){ if(destinos[idx]){ destinos[idx].dir=inp.value; destinos[idx].ll=place.location||null; } compute(); }; })(i,t)); } }
     compute();
   });
@@ -336,10 +358,8 @@
     if(del!==null){ destinos.splice(+del,1); if(destinos.length===0) destinos.push(nuevoDestino(0)); renderDestinos(); return; }
     var seg=e.target.closest(".seg");
     if(seg && e.target.tagName=="BUTTON"){
-      var i=+seg.getAttribute("data-i"), v=e.target.getAttribute("data-v");
-      destinos[i].tipo=v;
-      Array.prototype.forEach.call(seg.children,function(btn){ btn.classList.toggle("on",btn===e.target); });
-      compute();
+      var i=+seg.getAttribute("data-i"), mix=e.target.getAttribute("data-mix");
+      if(mix!==null){ var pr=mix.split(","); destinos[i].refriPct=+pr[0]; destinos[i].frioPct=+pr[1]; renderDestinos(); }
     }
   });
   $("addDest").addEventListener("click", function(){ destinos.push(nuevoDestino(0)); renderDestinos(); });
@@ -364,13 +384,14 @@
   $("soloIda").addEventListener("change", function(){ $("vueltaCard").classList.toggle("off",this.checked); compute(); });
 
   function recargoTipo(tipo,km){ if(tipo=="refri") return km*num("p-refri"); if(tipo=="frio") return km*num("p-frio"); return 0; }
+  function recargoMix(d,km){ return km*(((+d.refriPct||0)/100)*num("p-refri") + ((+d.frioPct||0)/100)*num("p-frio")); }
 
   function compute(){
     var corte=num("p-corte"), mn=num("p-min"), pkm=num("p-km");
     var soloIda=$("soloIda").checked;
     var kmTotal=0, frio=0, noches=0, esperas=0;
     destinos.forEach(function(d){
-      kmTotal+=(+d.km||0); frio+=recargoTipo(d.tipo,(+d.km||0));
+      kmTotal+=(+d.km||0); frio+=recargoMix(d,(+d.km||0));
       if(d.noche) noches++; if(d.espera) esperas++;
     });
     var backhaul=0;
@@ -458,9 +479,10 @@
     var hoy=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
     var soloIda=$("soloIda").checked;
     var tipoTxt=function(t){ return t=="frio"?"Congelado −18°":(t=="refri"?"Refrigerado":"Seco"); };
+    var cargaTxt=function(d){ var rp=+d.refriPct||0, fpc=+d.frioPct||0, sp=Math.max(0,100-rp-fpc); var p=[]; if(fpc) p.push(fpc+"% Congelado"); if(rp) p.push(rp+"% Refrigerado"); if(sp) p.push(sp+"% Seco"); if(p.length===1) return p[0].replace("100% ",""); return p.join(" · "); };
     var salida=($("partidaDir").value||"").trim()||($("baseDir").value||"").trim()||"—";
     var rt='<tr><td class="pt">Salida</td><td>'+esc(salida)+'</td><td></td><td></td></tr>';
-    destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td><td>'+(dd.km||0)+' km</td><td>'+tipoTxt(dd.tipo)+'</td></tr>'; });
+    destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td><td>'+(dd.km||0)+' km</td><td>'+cargaTxt(dd)+'</td></tr>'; });
     if(!soloIda){ var vk=num("vKm"); var vt=(vEstado=="cargada")?("cargada · "+tipoTxt(vTipo)):"vacía"; rt+='<tr><td class="pt">Vuelta a base</td><td>'+esc($("baseDir").value||"—")+'</td><td>'+vk+' km</td><td>'+vt+'</td></tr>'; }
     else { rt+='<tr><td class="pt">Modalidad</td><td>Solo ida (viaje encadenado)</td><td></td><td></td></tr>'; }
     var det="";
