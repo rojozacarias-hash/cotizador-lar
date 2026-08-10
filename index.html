@@ -240,6 +240,12 @@
   </div>
 
   <div class="card">
+    <p class="eyebrow">Tramos adicionales <span style="color:var(--muted);font-weight:400">&mdash; opcional (viaje combinado)</span></p>
+    <div id="tramos"></div>
+    <button type="button" class="addbtn" id="addTramo">+ Agregar tramo</button>
+  </div>
+
+  <div class="card">
     <p class="eyebrow">Extras</p>
     <div class="row2">
       <div><label class="lab">Peaje del viaje $</label><input type="number" id="peajeViaje" inputmode="numeric" min="0" value="0"></div>
@@ -381,6 +387,63 @@
   });
   $("addDest").addEventListener("click", function(){ destinos.push(nuevoDestino(0)); renderDestinos(); });
 
+  // ---- Tramos adicionales (viaje combinado) ----
+  var tramos=[];
+  function nuevoTramo(){ return {origen:"",destino:"",tipo:"iv",km:0,refriPct:0,frioPct:0,llOrigen:null,llDestino:null,placeOrigen:"",placeDestino:""}; }
+  function renderTramos(){
+    var cont=$("tramos"); cont.innerHTML="";
+    tramos.forEach(function(t,i){
+      var el=document.createElement("div"); el.className="destino";
+      el.innerHTML=
+        '<div class="dhead"><span class="dnum">Tramo '+(i+1)+'</span><button type="button" class="del" data-tdel="'+i+'" aria-label="Quitar">&times;</button></div>'+
+        '<div class="field"><label class="lab">Origen</label><input type="text" data-ti="'+i+'" data-tf="origen" value="'+(t.origen||"")+'" placeholder="Direcci&oacute;n de origen" autocomplete="off"></div>'+
+        '<div class="field"><label class="lab">Destino</label><input type="text" data-ti="'+i+'" data-tf="destino" value="'+(t.destino||"")+'" placeholder="Direcci&oacute;n de destino" autocomplete="off"></div>'+
+        '<div class="row2" style="margin-bottom:14px">'+
+          '<div><label class="lab">Tipo</label><div class="seg tseg" data-ti="'+i+'">'+
+            '<button type="button" data-tt="iv"'+(t.tipo!="solo"?' class="on"':'')+'>Ida y vuelta</button>'+
+            '<button type="button" data-tt="solo"'+(t.tipo=="solo"?' class="on"':'')+'>Solo ida</button>'+
+          '</div></div>'+
+          '<div><label class="lab">Km</label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="km" value="'+(t.km||0)+'"></div>'+
+        '</div>'+
+        '<div class="field"><label class="lab">Carga</label>'+
+          '<div class="seg" data-ti="'+i+'">'+
+            '<button type="button" data-tmix="0,0"'+((+t.refriPct||0)==0&&(+t.frioPct||0)==0?' class="on"':'')+'>Seco</button>'+
+            '<button type="button" data-tmix="100,0"'+((+t.refriPct||0)==100&&(+t.frioPct||0)==0?' class="on"':'')+'>Refrigerado</button>'+
+            '<button type="button" data-tmix="0,100"'+((+t.refriPct||0)==0&&(+t.frioPct||0)==100?' class="on"':'')+'>Congelado</button>'+
+          '</div>'+
+          '<div class="mixrow">'+
+            '<div><label class="lab2">Refrig. %</label><input type="number" inputmode="numeric" min="0" max="100" data-ti="'+i+'" data-tf="refriPct" value="'+(+t.refriPct||0)+'"></div>'+
+            '<div><label class="lab2">Congelado %</label><input type="number" inputmode="numeric" min="0" max="100" data-ti="'+i+'" data-tf="frioPct" value="'+(+t.frioPct||0)+'"></div>'+
+            '<div class="secohint">Seco<br><b>'+Math.max(0,100-(+t.refriPct||0)-(+t.frioPct||0))+'%</b></div>'+
+          '</div>'+
+        '</div>';
+      cont.appendChild(el);
+    });
+    compute();
+  }
+  $("tramos").addEventListener("input", function(e){
+    var el=e.target, i=el.getAttribute("data-ti"), f=el.getAttribute("data-tf");
+    if(i===null||f===null||el.tagName!="INPUT") return; i=+i;
+    if(f=="km") tramos[i].km=parseFloat(el.value)||0;
+    else if(f=="refriPct"||f=="frioPct"){ tramos[i][f]=Math.max(0,Math.min(100,parseFloat(el.value)||0)); var sh=el.closest(".field").querySelector(".secohint b"); if(sh) sh.textContent=Math.max(0,100-(+tramos[i].refriPct||0)-(+tramos[i].frioPct||0))+"%"; }
+    else if(f=="origen"){ tramos[i].origen=el.value; tramos[i].llOrigen=null; tramos[i].placeOrigen=""; queueFetch(el, el.value, (function(idx,inp){ return function(place,name){ if(tramos[idx]){ tramos[idx].origen=inp.value; tramos[idx].llOrigen=place.location||null; tramos[idx].placeOrigen=name||""; } compute(); }; })(i,el)); }
+    else if(f=="destino"){ tramos[i].destino=el.value; tramos[i].llDestino=null; tramos[i].placeDestino=""; queueFetch(el, el.value, (function(idx,inp){ return function(place,name){ if(tramos[idx]){ tramos[idx].destino=inp.value; tramos[idx].llDestino=place.location||null; tramos[idx].placeDestino=name||""; } compute(); }; })(i,el)); }
+    compute();
+  });
+  $("tramos").addEventListener("click", function(e){
+    var del=e.target.getAttribute("data-tdel");
+    if(del!==null){ tramos.splice(+del,1); renderTramos(); return; }
+    var seg=e.target.closest(".seg");
+    if(seg && e.target.tagName=="BUTTON"){
+      var i=+seg.getAttribute("data-ti");
+      var tt=e.target.getAttribute("data-tt");
+      if(tt!==null){ tramos[i].tipo=tt; Array.prototype.forEach.call(seg.children,function(b){ b.classList.toggle("on",b===e.target); }); compute(); return; }
+      var mix=e.target.getAttribute("data-tmix");
+      if(mix!==null){ var pr=mix.split(","); tramos[i].refriPct=+pr[0]; tramos[i].frioPct=+pr[1]; renderTramos(); }
+    }
+  });
+  $("addTramo").addEventListener("click", function(){ tramos.push(nuevoTramo()); renderTramos(); });
+
   // vuelta seg controls
   var vEstado="vacia", vTipo="seco";
   $("vEstadoSeg").addEventListener("click", function(e){
@@ -418,6 +481,8 @@
       if($("vNoche").checked) noches++;
       if($("vEspera").checked) esperas++;
     }
+    // tramos adicionales: suman km + frío (el fijo/mínimo se cobra una sola vez sobre el km_total)
+    tramos.forEach(function(t){ var tk=+t.km||0; kmTotal+=tk; frio+=recargoMix(t,tk); });
 
     var b=$("badge");
     if(kmTotal<=0){
@@ -476,7 +541,7 @@
     Q={ kmTotal:kmTotal, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido, piso:piso };
 
     // firma del cálculo → si ya se guardó y algo cambió, re-bloquear la descarga
-    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}));
+    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.refriPct,t.frioPct];}));
     lastSig=sig;
     if(saved && sig!==savedSig) touch();
   }
@@ -505,8 +570,8 @@
     var validez=parseInt(num("p-validez"))||10;
     var soloIda=$("soloIda").checked;
     // tipo de servicio global (sin desglose por tramo)
-    var hasRefri=destinos.some(function(d){return (+d.refriPct||0)>0;}) || (!soloIda && vEstado=="cargada" && vTipo=="refri");
-    var hasFrio =destinos.some(function(d){return (+d.frioPct||0)>0;})  || (!soloIda && vEstado=="cargada" && vTipo=="frio");
+    var hasRefri=destinos.some(function(d){return (+d.refriPct||0)>0;}) || tramos.some(function(t){return (+t.refriPct||0)>0;}) || (!soloIda && vEstado=="cargada" && vTipo=="refri");
+    var hasFrio =destinos.some(function(d){return (+d.frioPct||0)>0;})  || tramos.some(function(t){return (+t.frioPct||0)>0;}) || (!soloIda && vEstado=="cargada" && vTipo=="frio");
     var servicio=(hasFrio&&hasRefri)?"Refrigerado + Congelado (−18°)":hasFrio?"Congelado (−18°)":hasRefri?"Refrigerado":"Seco";
     // ruta: solo direcciones (origen → destinos → vuelta)
     var salida=($("partidaDir").value||"").trim()||($("baseDir").value||"").trim()||"—";
@@ -514,6 +579,7 @@
     destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td></tr>'; });
     if(!soloIda) rt+='<tr><td class="pt">Vuelta</td><td>'+esc($("baseDir").value||"Base")+'</td></tr>';
     else rt+='<tr><td class="pt">Modalidad</td><td>Solo ida</td></tr>';
+    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" (ida y vuelta)"))+'</td></tr>'; });
     var cinfo="";
     if(cliente) cinfo+='<div><b>Cliente:</b> '+esc(cliente)+'</div>';
     if(cuit)    cinfo+='<div><b>CUIT / DNI:</b> '+esc(cuit)+'</div>';
@@ -555,12 +621,15 @@
     var ppName=($("partidaDir").value||"").trim() ? (partidaName||firstChunk($("partidaDir").value)) : (baseName||firstChunk($("baseDir").value)||"Base");
     var dParts=destinos.map(function(d,i){ return "D"+(i+1)+": "+((d.place||firstChunk(d.dir))||"?"); });
     var recorrido="PP: "+ppName+(dParts.length?(" / "+dParts.join(" / ")):"")+(soloIda?" (solo ida)":" / BASE");
-    var anyFrio=destinos.some(function(d){return (+d.frioPct||0)>0;}) || (!soloIda&&vEstado=="cargada"&&vTipo=="frio");
+    var tParts=tramos.filter(function(t){return (t.origen||t.destino);}).map(function(t){ var o=t.placeOrigen||firstChunk(t.origen)||"?"; var dd=t.placeDestino||firstChunk(t.destino)||"?"; return o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" (ida y vuelta)"); });
+    if(tParts.length) recorrido+=" + Tramos: "+tParts.join(" ; ");
+    var anyFrio=destinos.some(function(d){return (+d.frioPct||0)>0;}) || tramos.some(function(t){return (+t.frioPct||0)>0;}) || (!soloIda&&vEstado=="cargada"&&vTipo=="frio");
     var anyEspera=destinos.some(function(d){return d.espera;}) || (!soloIda&&$("vEspera").checked);
     var detalle={
       base:$("baseDir").value||"", partida:$("partidaDir").value||"", soloIda:soloIda,
       destinos:destinos.map(function(d){ return {dir:d.dir,km:d.km,refriPct:d.refriPct,frioPct:d.frioPct,noche:d.noche,espera:d.espera}; }),
       vuelta:{km:num("vKm"),estado:vEstado,tipo:vTipo,noche:$("vNoche").checked,espera:$("vEspera").checked},
+      tramos:tramos.filter(function(t){return (t.origen||t.destino||t.km);}).map(function(t){ return {origen:t.origen,destino:t.destino,tipo:t.tipo,km:t.km,refriPct:t.refriPct,frioPct:t.frioPct}; }),
       extras:{peaje:num("peajeViaje"),paradasNoPrevistas:num("par")},
       precios:{piso:Q.piso,sugerido:Q.sugerido,final:num("finalPrice")||null},
       desglose:{base:Q.base,frio:Q.frio,backhaul:Q.backhaul,paradas:Q.paradasR,espera:Q.esperaR,noches:Q.nocheR,peaje:Q.peaje}
@@ -606,7 +675,7 @@
 
   $("reset").addEventListener("click", function(){ for(var k in defaults){ $(k).value=defaults[k]; } compute(); });
   $("newQuote").addEventListener("click", function(){
-    destinos=[nuevoDestino(0)];
+    destinos=[nuevoDestino(0)]; tramos=[];
     saved=null; savedSig=null; currentRef=newRef(); lockDownload(true);
     var _c=$("cotIdBox"); if(_c) _c.textContent="Se asigna al guardar en Notion"; setSaveMsg("");
     $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value="";
@@ -617,7 +686,7 @@
     Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
     $("vNoche").checked=false; $("vEspera").checked=false; $("vNocheChk").classList.remove("on"); $("vEsperaChk").classList.remove("on");
     $("peajeViaje").value=0; $("par").value=0; $("finalPrice").value="";
-    renderDestinos(); window.scrollTo({top:0,behavior:"smooth"});
+    renderDestinos(); renderTramos(); window.scrollTo({top:0,behavior:"smooth"});
   });
 
   // ---- Google Maps (API nueva: Places Autocomplete Data + Distance Matrix) ----
@@ -680,6 +749,16 @@
   // calcular km (Distance Matrix, acepta LatLng o texto)
   $("calcKm").addEventListener("click", function(){
     if(!gmapsReady||!DM){ setMsg("El mapa todavía está cargando…"); return; }
+    // tramos adicionales: km directo origen→destino (×2 si es ida y vuelta)
+    tramos.forEach(function(t,ti){
+      var o=t.llOrigen||(t.origen||"").trim(), d=t.llDestino||(t.destino||"").trim();
+      if(!o||!d) return;
+      DM.getDistanceMatrix({origins:[o],destinations:[d],travelMode:TM}).then(function(res){
+        var el=res&&res.rows&&res.rows[0]&&res.rows[0].elements[0]; if(!el||el.status!=="OK") return;
+        var one=Math.round(el.distance.value/1000); t.km=(t.tipo=="solo")?one:one*2;
+        var inp=document.querySelector('#tramos input[data-tf="km"][data-ti="'+ti+'"]'); if(inp) inp.value=t.km; compute();
+      }).catch(function(){});
+    });
     var start=baseLL||partidaLL||($("partidaDir").value||$("baseDir").value||"").trim();
     if(!start){ setMsg("⚠️ Poné la Base o el Punto de partida."); return; }
     var pts=[start], ok=true;
@@ -715,7 +794,7 @@
   lockDownload(true);
   ["cliente","cuit","tel","mail"].forEach(function(id){ var el=$(id); if(el) el.addEventListener("input",touch); });
   destinos=[nuevoDestino(0)];
-  renderDestinos();
+  renderDestinos(); renderTramos();
 })();
 </script>
 </body>
