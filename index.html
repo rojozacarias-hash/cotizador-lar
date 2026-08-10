@@ -179,6 +179,10 @@
       <div class="cotidbox" id="cotIdBox">Se asigna al guardar en Notion</div>
     </div>
     <div class="field">
+      <label class="lab" for="fechaViaje">Fecha del viaje</label>
+      <input type="date" id="fechaViaje">
+    </div>
+    <div class="field">
       <label class="lab" for="cliente">Nombre / Raz&oacute;n social</label>
       <input type="text" id="cliente" placeholder="Nombre del cliente" autocomplete="off">
     </div>
@@ -654,7 +658,7 @@
       tel:($("tel").value||"").trim(), mail:($("mail").value||"").trim(),
       km:Q.kmTotal, piso:Q.piso, sugerido:Q.sugerido, final:num("finalPrice")||null,
       paradasExtra:num("par"), congelado:anyFrio, esperaLarga:anyEspera,
-      destino:recorrido, fecha:new Date().toISOString().slice(0,10), detalle:JSON.stringify(detalle)
+      destino:recorrido, fecha:new Date().toISOString().slice(0,10), fechaViaje:($("fechaViaje").value||""), detalle:JSON.stringify(detalle)
     };
   }
   function guardarNotion(){
@@ -692,7 +696,7 @@
     destinos=[nuevoDestino(0)]; tramos=[];
     saved=null; savedSig=null; currentRef=newRef(); lockDownload(true);
     var _c=$("cotIdBox"); if(_c) _c.textContent="Se asigna al guardar en Notion"; setSaveMsg("");
-    $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value="";
+    $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value=""; $("fechaViaje").value="";
     baseLL=null; partidaLL=null; baseName=""; partidaName="";
     $("baseDir").value="Carlos Pellegrini 3484, B1827 Lanús, Provincia de Buenos Aires"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
     $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
@@ -868,7 +872,7 @@
 
   currentRef=newRef();
   lockDownload(true);
-  ["cliente","cuit","tel","mail"].forEach(function(id){ var el=$(id); if(el) el.addEventListener("input",touch); });
+  ["cliente","cuit","tel","mail","fechaViaje"].forEach(function(id){ var el=$(id); if(el) el.addEventListener("input",touch); });
   destinos=[nuevoDestino(0)];
   renderDestinos(); renderTramos();
 })();
