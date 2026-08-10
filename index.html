@@ -210,6 +210,15 @@
     <p class="eyebrow">Destinos</p>
     <div id="destinos"></div>
     <button type="button" class="addbtn" id="addDest">+ Agregar destino</button>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Tramos adicionales <span style="color:var(--muted);font-weight:400">&mdash; opcional (viaje combinado)</span></p>
+    <div id="tramos"></div>
+    <button type="button" class="addbtn" id="addTramo">+ Agregar tramo</button>
+  </div>
+
+  <div class="card">
     <button type="button" class="mapbtn" id="calcKm">🗺️ Calcular km con Google Maps</button>
     <button type="button" class="addbtn" id="optRoute" style="margin-top:8px">🔀 Optimizar orden de destinos</button>
     <div class="mapmsg" id="mapmsg"></div>
@@ -238,12 +247,6 @@
       <label class="chk" id="vNocheChk"><input type="checkbox" id="vNoche"> &#127765; Pernocte</label>
       <label class="chk" id="vEsperaChk"><input type="checkbox" id="vEspera"> &#9203; Espera</label>
     </div>
-  </div>
-
-  <div class="card">
-    <p class="eyebrow">Tramos adicionales <span style="color:var(--muted);font-weight:400">&mdash; opcional (viaje combinado)</span></p>
-    <div id="tramos"></div>
-    <button type="button" class="addbtn" id="addTramo">+ Agregar tramo</button>
   </div>
 
   <div class="card">
@@ -397,7 +400,7 @@
       var el=document.createElement("div"); el.className="destino";
       el.innerHTML=
         '<div class="dhead"><span class="dnum">Tramo '+(i+1)+'</span><button type="button" class="del" data-tdel="'+i+'" aria-label="Quitar">&times;</button></div>'+
-        '<div class="field"><label class="lab">Origen</label><input type="text" data-ti="'+i+'" data-tf="origen" value="'+(t.origen||"")+'" placeholder="Direcci&oacute;n de origen" autocomplete="off"></div>'+
+        '<div class="field"><label class="lab">Punto de partida</label><input type="text" data-ti="'+i+'" data-tf="origen" value="'+(t.origen||"")+'" placeholder="Direcci&oacute;n de partida del tramo" autocomplete="off"></div>'+
         '<div class="field"><label class="lab">Destino</label><input type="text" data-ti="'+i+'" data-tf="destino" value="'+(t.destino||"")+'" placeholder="Direcci&oacute;n de destino" autocomplete="off"></div>'+
         '<div class="row2" style="margin-bottom:14px">'+
           '<div><label class="lab">Tipo</label><div class="seg tseg" data-ti="'+i+'">'+
@@ -580,7 +583,7 @@
     destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td></tr>'; });
     if(!soloIda) rt+='<tr><td class="pt">Vuelta</td><td>'+esc($("baseDir").value||"Base")+'</td></tr>';
     else rt+='<tr><td class="pt">Modalidad</td><td>Solo ida</td></tr>';
-    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" (ida y vuelta)"))+'</td></tr>'; });
+    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" → Base"))+'</td></tr>'; });
     var cinfo="";
     if(cliente) cinfo+='<div><b>Cliente:</b> '+esc(cliente)+'</div>';
     if(cuit)    cinfo+='<div><b>CUIT / DNI:</b> '+esc(cuit)+'</div>';
@@ -622,7 +625,7 @@
     var ppName=($("partidaDir").value||"").trim() ? (partidaName||firstChunk($("partidaDir").value)) : (baseName||firstChunk($("baseDir").value)||"Base");
     var dParts=destinos.map(function(d,i){ return "D"+(i+1)+": "+((d.place||firstChunk(d.dir))||"?"); });
     var recorrido="PP: "+ppName+(dParts.length?(" / "+dParts.join(" / ")):"")+(soloIda?" (solo ida)":" / BASE");
-    var tParts=tramos.filter(function(t){return (t.origen||t.destino);}).map(function(t){ var o=t.placeOrigen||firstChunk(t.origen)||"?"; var dd=t.placeDestino||firstChunk(t.destino)||"?"; return o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" (ida y vuelta)"); });
+    var tParts=tramos.filter(function(t){return (t.origen||t.destino);}).map(function(t){ var o=t.placeOrigen||firstChunk(t.origen)||"?"; var dd=t.placeDestino||firstChunk(t.destino)||"?"; return o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" → Base"); });
     if(tParts.length) recorrido+=" + Tramos: "+tParts.join(" ; ");
     var anyFrio=destinos.some(function(d){return (+d.frioPct||0)>0;}) || tramos.some(function(t){return (+t.frioPct||0)>0;}) || (!soloIda&&vEstado=="cargada"&&vTipo=="frio");
     var anyEspera=destinos.some(function(d){return d.espera;}) || (!soloIda&&$("vEspera").checked);
@@ -750,14 +753,20 @@
   // calcular km (Distance Matrix, acepta LatLng o texto)
   $("calcKm").addEventListener("click", function(){
     if(!gmapsReady||!DM){ setMsg("El mapa todavía está cargando…"); return; }
-    // tramos adicionales: km directo origen→destino (×2 si es ida y vuelta)
+    // tramos adicionales: partida→destino (solo ida) o partida→destino→base (ida y vuelta)
+    var baseV=baseLL||($("baseDir").value||"").trim();
     tramos.forEach(function(t,ti){
       var o=t.llOrigen||(t.origen||"").trim(), d=t.llDestino||(t.destino||"").trim();
       if(!o||!d) return;
-      DM.getDistanceMatrix({origins:[o],destinations:[d],travelMode:TM}).then(function(res){
-        var el=res&&res.rows&&res.rows[0]&&res.rows[0].elements[0]; if(!el||el.status!=="OK") return;
-        var one=Math.round(el.distance.value/1000); t.km=(t.tipo=="solo")?one:one*2;
-        var inp=document.querySelector('#tramos input[data-tf="km"][data-ti="'+ti+'"]'); if(inp) inp.value=t.km; compute();
+      if(t.tipo!="solo" && !baseV) return; // ida y vuelta necesita base
+      var origins=(t.tipo=="solo")?[o]:[o,d];
+      var dests=(t.tipo=="solo")?[d]:[d,baseV];
+      DM.getDistanceMatrix({origins:origins,destinations:dests,travelMode:TM}).then(function(res){
+        if(!res||!res.rows) return;
+        var km;
+        if(t.tipo=="solo"){ var e=res.rows[0].elements[0]; if(!e||e.status!=="OK") return; km=Math.round(e.distance.value/1000); }
+        else { var e1=res.rows[0].elements[0], e2=res.rows[1].elements[1]; if(!e1||e1.status!=="OK"||!e2||e2.status!=="OK") return; km=Math.round((e1.distance.value+e2.distance.value)/1000); }
+        t.km=km; var inp=document.querySelector('#tramos input[data-tf="km"][data-ti="'+ti+'"]'); if(inp) inp.value=t.km; compute();
       }).catch(function(){});
     });
     var start=baseLL||partidaLL||($("partidaDir").value||$("baseDir").value||"").trim();
