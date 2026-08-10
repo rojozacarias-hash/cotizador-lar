@@ -314,7 +314,7 @@
   function line(k,v,add){return '<div class="line'+(add?' add':'')+'"><span class="k">'+k+'</span><span class="v">'+fmt(v)+'</span></div>';}
 
   var destinos=[];
-  function nuevoDestino(km){ return {dir:"",fecha:"",hora:"",km:(km||0),refriPct:0,frioPct:0,noche:false,espera:false,ll:null}; }
+  function nuevoDestino(km){ return {dir:"",fecha:"",hora:"",km:(km||0),refriPct:0,frioPct:0,noche:false,espera:false,ll:null,place:""}; }
 
   function segHtml(id,f,val,opts){
     var h='<div class="seg" data-i="'+id+'" data-f="'+f+'">';
@@ -367,7 +367,7 @@
       var sh=t.closest(".field").querySelector(".secohint b");
       if(sh) sh.textContent=Math.max(0,100-(+destinos[i].refriPct||0)-(+destinos[i].frioPct||0))+"%";
     }
-    else { destinos[i][f]=t.value; if(f=="dir"){ destinos[i].ll=null; queueFetch(t, t.value, (function(idx,inp){ return function(place){ if(destinos[idx]){ destinos[idx].dir=inp.value; destinos[idx].ll=place.location||null; } compute(); }; })(i,t)); } }
+    else { destinos[i][f]=t.value; if(f=="dir"){ destinos[i].ll=null; destinos[i].place=""; queueFetch(t, t.value, (function(idx,inp){ return function(place,name){ if(destinos[idx]){ destinos[idx].dir=inp.value; destinos[idx].ll=place.location||null; destinos[idx].place=name||""; } compute(); }; })(i,t)); } }
     compute();
   });
   $("destinos").addEventListener("click", function(e){
@@ -536,11 +536,22 @@
 
   // ---- Guardar en Notion (vía Worker) ----
   function cargaShort(d){ var rp=+d.refriPct||0, fpc=+d.frioPct||0; if(fpc&&rp) return "refri "+rp+"%/cong "+fpc+"%"; if(fpc) return fpc==100?"congelado":"cong "+fpc+"%"; if(rp) return rp==100?"refrig":"refri "+rp+"%"; return "seco"; }
+  function firstChunk(s){ return (String(s||"").split(",")[0]||"").trim(); }
+  function shortPlace(place){
+    try{
+      var comps=place.addressComponents||[];
+      var pref=["neighborhood","sublocality_level_1","sublocality","locality","administrative_area_level_2"];
+      for(var p=0;p<pref.length;p++){ for(var i=0;i<comps.length;i++){ var t=comps[i].types||[]; if(t.indexOf(pref[p])>=0) return comps[i].longText||comps[i].shortText; } }
+      if(comps.length) return comps[0].longText||comps[0].shortText;
+    }catch(e){}
+    return firstChunk(place.formattedAddress);
+  }
   function buildPayload(){
     var soloIda=$("soloIda").checked;
-    var salida=($("partidaDir").value||"").trim()||($("baseDir").value||"").trim()||"Base";
-    var stops=destinos.map(function(d,i){ return "D"+(i+1)+": "+(d.dir||"?")+" ("+(d.km||0)+"km, "+cargaShort(d)+")"; });
-    var ruta=salida+" → "+stops.join(" → ")+(soloIda?" [solo ida]":(" → Base"+(vEstado=="cargada"?(" (vuelta "+vTipo+")"):" (vacía)")));
+    // recorrido legible con nombres de lugar (PP / D1 / D2 / BASE)
+    var ppName=($("partidaDir").value||"").trim() ? (partidaName||firstChunk($("partidaDir").value)) : (baseName||firstChunk($("baseDir").value)||"Base");
+    var dParts=destinos.map(function(d,i){ return "D"+(i+1)+": "+((d.place||firstChunk(d.dir))||"?"); });
+    var recorrido="PP: "+ppName+(dParts.length?(" / "+dParts.join(" / ")):"")+(soloIda?" (solo ida)":" / BASE");
     var anyFrio=destinos.some(function(d){return (+d.frioPct||0)>0;}) || (!soloIda&&vEstado=="cargada"&&vTipo=="frio");
     var anyEspera=destinos.some(function(d){return d.espera;}) || (!soloIda&&$("vEspera").checked);
     var detalle={
@@ -557,7 +568,7 @@
       tel:($("tel").value||"").trim(), mail:($("mail").value||"").trim(),
       km:Q.kmTotal, piso:Q.piso, sugerido:Q.sugerido, final:num("finalPrice")||null,
       paradasExtra:num("par"), congelado:anyFrio, esperaLarga:anyEspera,
-      destino:ruta, fecha:new Date().toISOString().slice(0,10), detalle:JSON.stringify(detalle)
+      destino:recorrido, fecha:new Date().toISOString().slice(0,10), detalle:JSON.stringify(detalle)
     };
   }
   function guardarNotion(){
@@ -596,7 +607,7 @@
     saved=null; savedSig=null; currentRef=newRef(); lockDownload(true);
     var _c=$("cotIdBox"); if(_c) _c.textContent="Se asigna al guardar en Notion"; setSaveMsg("");
     $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value="";
-    baseLL=null; partidaLL=null;
+    baseLL=null; partidaLL=null; baseName=""; partidaName="";
     $("baseDir").value="Villa Lugano, CABA"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
     $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
     Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
@@ -608,7 +619,7 @@
 
   // ---- Google Maps (API nueva: Places Autocomplete Data + Distance Matrix) ----
   var GKEY="AIzaSyBbnBKihgJmLcnp4Vp510NWNstyZ4_RtxI";
-  var gmapsReady=false, baseLL=null, partidaLL=null;
+  var gmapsReady=false, baseLL=null, partidaLL=null, baseName="", partidaName="";
   var ACtor=null, tokenCtor=null, DM=null, TM="DRIVING", acToken=null;
   function setMsg(t){ var m=$("mapmsg"); if(m) m.textContent=t; }
 
@@ -649,9 +660,9 @@
   async function pickSug(pred, inp, onSelect){
     try{
       var place=pred.toPlace();
-      await place.fetchFields({ fields:["location","formattedAddress"] });
+      await place.fetchFields({ fields:["location","formattedAddress","addressComponents"] });
       inp.value=place.formattedAddress||(pred.text&&pred.text.text)||inp.value;
-      onSelect(place);
+      onSelect(place, shortPlace(place));
       acToken=null; // cierra la sesión de facturación
     }catch(e){ setMsg("Error al elegir dirección: "+(e.message||e)); }
     hideDD();
@@ -660,8 +671,8 @@
   window.addEventListener("scroll", function(){ if(acInput) positionDD(acInput); }, true);
 
   // base / partida
-  $("baseDir").addEventListener("input", function(){ baseLL=null; queueFetch(this, this.value, function(place){ baseLL=place.location||null; }); });
-  $("partidaDir").addEventListener("input", function(){ partidaLL=null; queueFetch(this, this.value, function(place){ partidaLL=place.location||null; }); });
+  $("baseDir").addEventListener("input", function(){ baseLL=null; baseName=""; queueFetch(this, this.value, function(place,name){ baseLL=place.location||null; baseName=name||""; }); });
+  $("partidaDir").addEventListener("input", function(){ partidaLL=null; partidaName=""; queueFetch(this, this.value, function(place,name){ partidaLL=place.location||null; partidaName=name||""; }); });
 
   // calcular km (Distance Matrix, acepta LatLng o texto)
   $("calcKm").addEventListener("click", function(){
