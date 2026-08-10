@@ -211,6 +211,7 @@
     <div id="destinos"></div>
     <button type="button" class="addbtn" id="addDest">+ Agregar destino</button>
     <button type="button" class="mapbtn" id="calcKm">🗺️ Calcular km con Google Maps</button>
+    <button type="button" class="addbtn" id="optRoute" style="margin-top:8px">🔀 Optimizar orden de destinos</button>
     <div class="mapmsg" id="mapmsg"></div>
   </div>
 
@@ -773,6 +774,49 @@
       for(var i=0;i<origins.length;i++){ var el=res.rows[i].elements[i]; if(!el||el.status!=="OK"){ setMsg("No encontré ruta en un tramo."); return; } var km=Math.round(el.distance.value/1000); if(i<destinos.length){ destinos[i].km=km; var inp=document.querySelector('#destinos input[data-f="km"][data-i="'+i+'"]'); if(inp) inp.value=km; } else $("vKm").value=km; }
       setMsg("✅ Km calculados desde el mapa."); compute();
     }).catch(function(e){ setMsg("No pude calcular: "+(e.message||e)); });
+  });
+
+  // optimizar orden de destinos (minimiza km): matriz de distancias + TSP chico
+  function permute(arr){ if(arr.length<=1) return [arr]; var out=[]; for(var i=0;i<arr.length;i++){ var rest=arr.slice(0,i).concat(arr.slice(i+1)); var sub=permute(rest); for(var j=0;j<sub.length;j++) out.push([arr[i]].concat(sub[j])); } return out; }
+  $("optRoute").addEventListener("click", function(){
+    if(!gmapsReady||!DM){ setMsg("El mapa todavía está cargando…"); return; }
+    if(destinos.length<2){ setMsg("Necesitás 2 o más destinos para optimizar."); return; }
+    var soloIda=$("soloIda").checked;
+    var partVal=(($("partidaDir").value||"").trim()) ? (partidaLL||$("partidaDir").value.trim()) : (baseLL||($("baseDir").value||"").trim());
+    var baseVal=baseLL||($("baseDir").value||"").trim();
+    if(!partVal){ setMsg("⚠️ Poné la Base o el Punto de partida."); return; }
+    var destPts=[], ok=true;
+    destinos.forEach(function(d){ var v=d.ll||(d.dir||"").trim(); if(!v) ok=false; destPts.push(v); });
+    if(!ok){ setMsg("⚠️ Faltan direcciones de destino."); return; }
+    if(!soloIda && !baseVal){ setMsg("⚠️ Poné la Base (para la vuelta)."); return; }
+    var N=destinos.length;
+    var pts=[partVal].concat(destPts); var idxEnd=-1;
+    if(!soloIda){ pts.push(baseVal); idxEnd=pts.length-1; }
+    if(pts.length>10){ setMsg("Demasiados destinos para optimizar de una vez (máx 8-9)."); return; }
+    setMsg("Optimizando orden…");
+    DM.getDistanceMatrix({origins:pts,destinations:pts,travelMode:TM}).then(function(res){
+      if(!res||!res.rows){ setMsg("No pude optimizar."); return; }
+      var M=res.rows.map(function(row){ return row.elements.map(function(e){ return (e&&e.status==="OK")?e.distance.value:Infinity; }); });
+      var idxs=[]; for(var i=1;i<=N;i++) idxs.push(i);
+      function cost(order){ var c=M[0][order[0]]; for(var k=0;k<order.length-1;k++) c+=M[order[k]][order[k+1]]; if(idxEnd>=0) c+=M[order[order.length-1]][idxEnd]; return c; }
+      var best=null, bestC=Infinity;
+      if(N<=8){
+        var perms=permute(idxs);
+        for(var p=0;p<perms.length;p++){ var c=cost(perms[p]); if(c<bestC){ bestC=c; best=perms[p]; } }
+      } else {
+        var rem=idxs.slice(), order=[], cur=0;
+        while(rem.length){ var bi=0, bd=Infinity; for(var r2=0;r2<rem.length;r2++){ if(M[cur][rem[r2]]<bd){ bd=M[cur][rem[r2]]; bi=r2; } } order.push(rem[bi]); cur=rem[bi]; rem.splice(bi,1); }
+        best=order; bestC=cost(order);
+      }
+      if(!best || bestC===Infinity){ setMsg("No encontré ruta entre algunos puntos."); return; }
+      var newDest=best.map(function(idx){ return destinos[idx-1]; });
+      newDest[0].km=Math.round(M[0][best[0]]/1000);
+      for(var k=1;k<best.length;k++) newDest[k].km=Math.round(M[best[k-1]][best[k]]/1000);
+      destinos=newDest;
+      if(idxEnd>=0) $("vKm").value=Math.round(M[best[best.length-1]][idxEnd]/1000);
+      renderDestinos();
+      setMsg("✅ Orden optimizado — "+Math.round(bestC/1000)+" km en total.");
+    }).catch(function(e){ setMsg("No pude optimizar: "+(e.message||e)); });
   });
 
   // loader nuevo (dynamic library import) + init async
