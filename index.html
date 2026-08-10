@@ -196,7 +196,7 @@
     <p class="eyebrow">Ruta</p>
     <div class="field">
       <label class="lab" for="baseDir">Base <span style="color:var(--muted);font-weight:400">(d&oacute;nde vive el cami&oacute;n)</span></label>
-      <input type="text" id="baseDir" placeholder="Direcci&oacute;n de la base" value="Villa Lugano, CABA" autocomplete="off">
+      <input type="text" id="baseDir" placeholder="Direcci&oacute;n de la base" value="Carlos Pellegrini 3484, B1827 Lanús, Provincia de Buenos Aires" autocomplete="off">
     </div>
     <div class="field">
       <label class="lab" for="partidaDir">Punto de partida <span style="color:var(--muted);font-weight:400">(si sale de otro lado)</span></label>
@@ -529,7 +529,10 @@
       '<div class="pfoot">Cotización válida por '+validez+' días desde la fecha.<br>LAR · Transporte refrigerado</div>'+
       '</div>';
     $("printArea").innerHTML=html;
+    var oldTitle=document.title;
+    document.title="LAR "+cotizId+" "+new Date().toISOString().slice(0,10); // nombre del archivo PDF
     window.print();
+    setTimeout(function(){ document.title=oldTitle; }, 1500);
   }
   $("downloadBtn").addEventListener("click", descargarCotizacion);
   $("saveBtn").addEventListener("click", guardarNotion);
@@ -608,7 +611,7 @@
     var _c=$("cotIdBox"); if(_c) _c.textContent="Se asigna al guardar en Notion"; setSaveMsg("");
     $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value="";
     baseLL=null; partidaLL=null; baseName=""; partidaName="";
-    $("baseDir").value="Villa Lugano, CABA"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
+    $("baseDir").value="Carlos Pellegrini 3484, B1827 Lanús, Provincia de Buenos Aires"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
     $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
     Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
     Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
