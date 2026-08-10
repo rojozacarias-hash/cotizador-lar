@@ -393,7 +393,7 @@
 
   // ---- Tramos adicionales (viaje combinado) ----
   var tramos=[];
-  function nuevoTramo(){ return {origen:"",destino:"",tipo:"iv",km:0,refriPct:0,frioPct:0,llOrigen:null,llDestino:null,placeOrigen:"",placeDestino:""}; }
+  function nuevoTramo(){ return {origen:"",destino:"",tipo:"iv",km:0,kmVacio:0,refriPct:0,frioPct:0,llOrigen:null,llDestino:null,placeOrigen:"",placeDestino:""}; }
   function renderTramos(){
     var cont=$("tramos"); cont.innerHTML="";
     tramos.forEach(function(t,i){
@@ -409,6 +409,7 @@
           '</div></div>'+
           '<div><label class="lab">Km</label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="km" value="'+(t.km||0)+'"></div>'+
         '</div>'+
+        '<div class="field"><label class="lab">Km reposicionamiento <span style="color:var(--muted);font-weight:400">(hasta la partida del tramo)</span></label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="kmVacio" value="'+(t.kmVacio||0)+'"></div>'+
         '<div class="field"><label class="lab">Carga</label>'+
           '<div class="seg" data-ti="'+i+'">'+
             '<button type="button" data-tmix="0,0"'+((+t.refriPct||0)==0&&(+t.frioPct||0)==0?' class="on"':'')+'>Seco</button>'+
@@ -429,6 +430,7 @@
     var el=e.target, i=el.getAttribute("data-ti"), f=el.getAttribute("data-tf");
     if(i===null||f===null||el.tagName!="INPUT") return; i=+i;
     if(f=="km") tramos[i].km=parseFloat(el.value)||0;
+    else if(f=="kmVacio") tramos[i].kmVacio=parseFloat(el.value)||0;
     else if(f=="refriPct"||f=="frioPct"){ tramos[i][f]=Math.max(0,Math.min(100,parseFloat(el.value)||0)); var sh=el.closest(".field").querySelector(".secohint b"); if(sh) sh.textContent=Math.max(0,100-(+tramos[i].refriPct||0)-(+tramos[i].frioPct||0))+"%"; }
     else if(f=="origen"){ tramos[i].origen=el.value; tramos[i].llOrigen=null; tramos[i].placeOrigen=""; queueFetch(el, el.value, (function(idx,inp){ return function(place,name){ if(tramos[idx]){ tramos[idx].origen=inp.value; tramos[idx].llOrigen=place.location||null; tramos[idx].placeOrigen=name||""; } compute(); }; })(i,el)); }
     else if(f=="destino"){ tramos[i].destino=el.value; tramos[i].llDestino=null; tramos[i].placeDestino=""; queueFetch(el, el.value, (function(idx,inp){ return function(place,name){ if(tramos[idx]){ tramos[idx].destino=inp.value; tramos[idx].llDestino=place.location||null; tramos[idx].placeDestino=name||""; } compute(); }; })(i,el)); }
@@ -473,20 +475,24 @@
   function compute(){
     var corte=num("p-corte"), mn=num("p-min"), pkm=num("p-km");
     var soloIda=$("soloIda").checked;
-    var kmTotal=0, frio=0, noches=0, esperas=0;
+    var loadedKm=0, frio=0, noches=0, esperas=0, emptyKm=0, emptyCost=0;
     destinos.forEach(function(d){
-      kmTotal+=(+d.km||0); frio+=recargoMix(d,(+d.km||0));
+      loadedKm+=(+d.km||0); frio+=recargoMix(d,(+d.km||0));
       if(d.noche) noches++; if(d.espera) esperas++;
     });
     var backhaul=0;
     if(!soloIda){
-      var vKm=num("vKm"); kmTotal+=vKm;
+      var vKm=num("vKm"); loadedKm+=vKm;
       if(vEstado=="cargada"){ frio+=recargoTipo(vTipo,vKm); backhaul=vKm*num("p-backhaul"); }
       if($("vNoche").checked) noches++;
       if($("vEspera").checked) esperas++;
     }
-    // tramos adicionales: suman km + frío (el fijo/mínimo se cobra una sola vez sobre el km_total)
-    tramos.forEach(function(t){ var tk=+t.km||0; kmTotal+=tk; frio+=recargoMix(t,tk); });
+    // tramos: km cargado + km de reposicionamiento (todo a la tarifa $/km del sistema)
+    var tramoKm=0, tramoFrio=0;
+    tramos.forEach(function(t){
+      var tk=+t.km||0, kv=+t.kmVacio||0; tramoKm+=tk+kv; loadedKm+=tk+kv; var tf=recargoMix(t,tk); tramoFrio+=tf; frio+=tf;
+    });
+    var kmTotal=loadedKm+emptyKm;
 
     var b=$("badge");
     if(kmTotal<=0){
@@ -498,7 +504,7 @@
       return;
     }
 
-    var kmCobrable=Math.max(0,kmTotal-corte);
+    var kmCobrable=Math.max(0,loadedKm-corte);
     var base=mn+pkm*kmCobrable;
     var nocheR=noches*num("p-noche");
     var esperaR=esperas*num("p-espera");
@@ -506,7 +512,7 @@
     var paradaUnit=num("p-parada-fijo")+num("p-parada-km")*kmTotal;
     var paradasR=numParadas*paradaUnit;
     var peaje=num("peajeViaje");
-    var sugerido=base+frio+backhaul+nocheR+esperaR+paradasR+peaje;
+    var sugerido=base+frio+backhaul+emptyCost+nocheR+esperaR+paradasR+peaje;
 
     var varKm=num("p-gasoil")*num("p-consumo")/100+num("p-desgaste");
     var costoVar=varKm*kmTotal, reefer=frio;
@@ -521,9 +527,13 @@
     $("formula").textContent=kmTotal<=corte ? ("Ruta "+kmTotal+" km · dentro de "+corte+" km (mínimo)") : ("Ruta "+kmTotal+" km · "+fmt(mn)+" + "+fmt(pkm)+" × "+kmCobrable+" km");
 
     var rows="";
-    rows+=line("Precio base ("+kmTotal+" km)",base,false);
-    if(frio)     rows+=line("Frío / refrigerado",frio,true);
-    if(backhaul) rows+=line("Backhaul vuelta cargada",backhaul,true);
+    var mainLoadedKm=loadedKm-tramoKm, mainFrio=frio-tramoFrio;
+    var baseMain=mn+pkm*Math.max(0,mainLoadedKm-corte);
+    var tramoBaseCost=base-baseMain;
+    rows+=line("Precio base ("+mainLoadedKm+" km)",baseMain,false);
+    if(mainFrio)  rows+=line("Frío / refrigerado",mainFrio,true);
+    if(backhaul)  rows+=line("Backhaul vuelta cargada",backhaul,true);
+    if(tramoKm>0) rows+=line("Tramos adicionales ("+tramoKm+" km)",tramoBaseCost+tramoFrio,true);
     if(paradasR) rows+=line("Paradas ("+numParadas+")",paradasR,true);
     if(esperaR)  rows+=line("Espera ("+esperas+")",esperaR,true);
     if(nocheR)   rows+=line("Noches ("+noches+")",nocheR,true);
@@ -542,10 +552,10 @@
       else{ fr.className="final-read bad"; fr.textContent="⚠ "+fmt(Math.abs(dd))+" bajo el piso — pierde plata"; }
     }
 
-    Q={ kmTotal:kmTotal, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido, piso:piso };
+    Q={ kmTotal:kmTotal, loadedKm:loadedKm, emptyKm:emptyKm, emptyCost:emptyCost, tramoKm:tramoKm, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido, piso:piso };
 
     // firma del cálculo → si ya se guardó y algo cambió, re-bloquear la descarga
-    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.refriPct,t.frioPct];}));
+    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.kmVacio,t.refriPct,t.frioPct];}));
     lastSig=sig;
     if(saved && sig!==savedSig) touch();
   }
@@ -633,7 +643,7 @@
       base:$("baseDir").value||"", partida:$("partidaDir").value||"", soloIda:soloIda,
       destinos:destinos.map(function(d){ return {dir:d.dir,km:d.km,refriPct:d.refriPct,frioPct:d.frioPct,noche:d.noche,espera:d.espera}; }),
       vuelta:{km:num("vKm"),estado:vEstado,tipo:vTipo,noche:$("vNoche").checked,espera:$("vEspera").checked},
-      tramos:tramos.filter(function(t){return (t.origen||t.destino||t.km);}).map(function(t){ return {origen:t.origen,destino:t.destino,tipo:t.tipo,km:t.km,refriPct:t.refriPct,frioPct:t.frioPct}; }),
+      tramos:tramos.filter(function(t){return (t.origen||t.destino||t.km);}).map(function(t){ return {origen:t.origen,destino:t.destino,tipo:t.tipo,km:t.km,kmVacio:t.kmVacio,refriPct:t.refriPct,frioPct:t.frioPct}; }),
       extras:{peaje:num("peajeViaje"),paradasNoPrevistas:num("par")},
       precios:{piso:Q.piso,sugerido:Q.sugerido,final:num("finalPrice")||null},
       desglose:{base:Q.base,frio:Q.frio,backhaul:Q.backhaul,paradas:Q.paradasR,espera:Q.esperaR,noches:Q.nocheR,peaje:Q.peaje}
@@ -753,21 +763,34 @@
   // calcular km (Distance Matrix, acepta LatLng o texto)
   $("calcKm").addEventListener("click", function(){
     if(!gmapsReady||!DM){ setMsg("El mapa todavía está cargando…"); return; }
-    // tramos adicionales: partida→destino (solo ida) o partida→destino→base (ida y vuelta)
+    // tramos adicionales: km cargado (partida→destino[→base]) + km vacío (punto anterior→partida)
     var baseV=baseLL||($("baseDir").value||"").trim();
     tramos.forEach(function(t,ti){
       var o=t.llOrigen||(t.origen||"").trim(), d=t.llDestino||(t.destino||"").trim();
       if(!o||!d) return;
-      if(t.tipo!="solo" && !baseV) return; // ida y vuelta necesita base
-      var origins=(t.tipo=="solo")?[o]:[o,d];
-      var dests=(t.tipo=="solo")?[d]:[d,baseV];
-      DM.getDistanceMatrix({origins:origins,destinations:dests,travelMode:TM}).then(function(res){
-        if(!res||!res.rows) return;
-        var km;
-        if(t.tipo=="solo"){ var e=res.rows[0].elements[0]; if(!e||e.status!=="OK") return; km=Math.round(e.distance.value/1000); }
-        else { var e1=res.rows[0].elements[0], e2=res.rows[1].elements[1]; if(!e1||e1.status!=="OK"||!e2||e2.status!=="OK") return; km=Math.round((e1.distance.value+e2.distance.value)/1000); }
-        t.km=km; var inp=document.querySelector('#tramos input[data-tf="km"][data-ti="'+ti+'"]'); if(inp) inp.value=t.km; compute();
-      }).catch(function(){});
+      // 1) km cargado
+      if(!(t.tipo!="solo" && !baseV)){
+        var origins=(t.tipo=="solo")?[o]:[o,d];
+        var dests=(t.tipo=="solo")?[d]:[d,baseV];
+        DM.getDistanceMatrix({origins:origins,destinations:dests,travelMode:TM}).then(function(res){
+          if(!res||!res.rows) return;
+          var km;
+          if(t.tipo=="solo"){ var e=res.rows[0].elements[0]; if(!e||e.status!=="OK") return; km=Math.round(e.distance.value/1000); }
+          else { var e1=res.rows[0].elements[0], e2=res.rows[1].elements[1]; if(!e1||e1.status!=="OK"||!e2||e2.status!=="OK") return; km=Math.round((e1.distance.value+e2.distance.value)/1000); }
+          t.km=km; var inp=document.querySelector('#tramos input[data-tf="km"][data-ti="'+ti+'"]'); if(inp) inp.value=t.km; compute();
+        }).catch(function(){});
+      }
+      // 2) km vacío (reposicionamiento): punto anterior → partida del tramo
+      var prev;
+      if(ti===0){ var ld=destinos[destinos.length-1]; prev=(ld&&(ld.ll||(ld.dir||"").trim()))||baseV; }
+      else { var pt=tramos[ti-1]; prev=pt.llDestino||(pt.destino||"").trim(); }
+      if(prev){
+        DM.getDistanceMatrix({origins:[prev],destinations:[o],travelMode:TM}).then(function(res){
+          var e=res&&res.rows&&res.rows[0]&&res.rows[0].elements[0]; if(!e||e.status!=="OK") return;
+          t.kmVacio=Math.round(e.distance.value/1000);
+          var inp=document.querySelector('#tramos input[data-tf="kmVacio"][data-ti="'+ti+'"]'); if(inp) inp.value=t.kmVacio; compute();
+        }).catch(function(){});
+      }
     });
     var start=baseLL||partidaLL||($("partidaDir").value||$("baseDir").value||"").trim();
     if(!start){ setMsg("⚠️ Poné la Base o el Punto de partida."); return; }
