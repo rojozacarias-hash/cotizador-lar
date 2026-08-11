@@ -63,8 +63,9 @@
   .swrow .swlab span{display:block;font-size:11.5px;font-weight:400;color:var(--muted);margin-top:1px}
   .toggle{position:relative;width:48px;height:28px;flex:0 0 auto}
   .toggle input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
-  .track{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:background .18s}
-  .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.28);transition:transform .18s}
+  .track{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:background .18s;pointer-events:none}
+  .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.28);transition:transform .18s;pointer-events:none}
+  .toggle input{z-index:2}
   .toggle input:checked + .track{background:var(--accent)}
   .toggle input:checked + .track + .knob{transform:translateX(20px)}
   /* result */
@@ -397,7 +398,7 @@
 
   // ---- Tramos adicionales (viaje combinado) ----
   var tramos=[];
-  function nuevoTramo(){ return {origen:"",destino:"",tipo:"iv",km:0,kmVacio:0,refriPct:0,frioPct:0,llOrigen:null,llDestino:null,placeOrigen:"",placeDestino:""}; }
+  function nuevoTramo(){ return {origen:"",destino:"",tipo:"iv",km:0,kmVacio:0,peaje:0,refriPct:0,frioPct:0,llOrigen:null,llDestino:null,placeOrigen:"",placeDestino:""}; }
   function renderTramos(){
     var cont=$("tramos"); cont.innerHTML="";
     tramos.forEach(function(t,i){
@@ -413,7 +414,10 @@
           '</div></div>'+
           '<div><label class="lab">Km</label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="km" value="'+(t.km||0)+'"></div>'+
         '</div>'+
-        '<div class="field"><label class="lab">Km reposicionamiento <span style="color:var(--muted);font-weight:400">(hasta la partida del tramo)</span></label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="kmVacio" value="'+(t.kmVacio||0)+'"></div>'+
+        '<div class="row2" style="margin-bottom:14px">'+
+          '<div><label class="lab">Km reposicionamiento</label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="kmVacio" value="'+(t.kmVacio||0)+'"></div>'+
+          '<div><label class="lab">Peaje $</label><input type="number" inputmode="numeric" min="0" data-ti="'+i+'" data-tf="peaje" value="'+(t.peaje||0)+'"></div>'+
+        '</div>'+
         '<div class="field"><label class="lab">Carga</label>'+
           '<div class="seg" data-ti="'+i+'">'+
             '<button type="button" data-tmix="0,0"'+((+t.refriPct||0)==0&&(+t.frioPct||0)==0?' class="on"':'')+'>Seco</button>'+
@@ -435,6 +439,7 @@
     if(i===null||f===null||el.tagName!="INPUT") return; i=+i;
     if(f=="km") tramos[i].km=parseFloat(el.value)||0;
     else if(f=="kmVacio") tramos[i].kmVacio=parseFloat(el.value)||0;
+    else if(f=="peaje") tramos[i].peaje=parseFloat(el.value)||0;
     else if(f=="refriPct"||f=="frioPct"){ tramos[i][f]=Math.max(0,Math.min(100,parseFloat(el.value)||0)); var sh=el.closest(".field").querySelector(".secohint b"); if(sh) sh.textContent=Math.max(0,100-(+tramos[i].refriPct||0)-(+tramos[i].frioPct||0))+"%"; }
     else if(f=="origen"){ tramos[i].origen=el.value; tramos[i].llOrigen=null; tramos[i].placeOrigen=""; queueFetch(el, el.value, (function(idx,inp){ return function(place,name){ if(tramos[idx]){ tramos[idx].origen=inp.value; tramos[idx].llOrigen=place.location||null; tramos[idx].placeOrigen=name||""; } compute(); }; })(i,el)); }
     else if(f=="destino"){ tramos[i].destino=el.value; tramos[i].llDestino=null; tramos[i].placeDestino=""; queueFetch(el, el.value, (function(idx,inp){ return function(place,name){ if(tramos[idx]){ tramos[idx].destino=inp.value; tramos[idx].llDestino=place.location||null; tramos[idx].placeDestino=name||""; } compute(); }; })(i,el)); }
@@ -492,9 +497,9 @@
       if($("vEspera").checked) esperas++;
     }
     // tramos: km cargado + km de reposicionamiento (todo a la tarifa $/km del sistema)
-    var tramoKm=0, tramoFrio=0;
+    var tramoKm=0, tramoFrio=0, tramoPeaje=0;
     tramos.forEach(function(t){
-      var tk=+t.km||0, kv=+t.kmVacio||0; tramoKm+=tk+kv; loadedKm+=tk+kv; var tf=recargoMix(t,tk); tramoFrio+=tf; frio+=tf;
+      var tk=+t.km||0, kv=+t.kmVacio||0; tramoKm+=tk+kv; loadedKm+=tk+kv; var tf=recargoMix(t,tk); tramoFrio+=tf; frio+=tf; tramoPeaje+=+t.peaje||0;
     });
     var kmTotal=loadedKm+emptyKm;
 
@@ -515,7 +520,7 @@
     var numParadas=Math.max(0,destinos.length-1)+num("par");
     var paradaUnit=num("p-parada-fijo")+num("p-parada-km")*kmTotal;
     var paradasR=numParadas*paradaUnit;
-    var peaje=num("peajeViaje");
+    var peaje=num("peajeViaje")+tramoPeaje;
     var sugerido=base+frio+backhaul+emptyCost+nocheR+esperaR+paradasR+peaje;
 
     var varKm=num("p-gasoil")*num("p-consumo")/100+num("p-desgaste");
@@ -559,7 +564,7 @@
     Q={ kmTotal:kmTotal, loadedKm:loadedKm, emptyKm:emptyKm, emptyCost:emptyCost, tramoKm:tramoKm, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido, piso:piso };
 
     // firma del cálculo → si ya se guardó y algo cambió, re-bloquear la descarga
-    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.kmVacio,t.refriPct,t.frioPct];}));
+    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.kmVacio,t.peaje,t.refriPct,t.frioPct];}));
     lastSig=sig;
     if(saved && sig!==savedSig) touch();
   }
@@ -587,17 +592,16 @@
     var hoy=new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",year:"numeric"});
     var validez=parseInt(num("p-validez"))||10;
     var soloIda=$("soloIda").checked;
-    // tipo de servicio global (sin desglose por tramo)
-    var hasRefri=destinos.some(function(d){return (+d.refriPct||0)>0;}) || tramos.some(function(t){return (+t.refriPct||0)>0;}) || (!soloIda && vEstado=="cargada" && vTipo=="refri");
-    var hasFrio =destinos.some(function(d){return (+d.frioPct||0)>0;})  || tramos.some(function(t){return (+t.frioPct||0)>0;}) || (!soloIda && vEstado=="cargada" && vTipo=="frio");
-    var servicio=(hasFrio&&hasRefri)?"Refrigerado + Congelado (−18°)":hasFrio?"Congelado (−18°)":hasRefri?"Refrigerado":"Seco";
-    // ruta: solo direcciones (origen → destinos → vuelta)
+    // servicio (carga) por fila — se muestra en cada tramo/destino
+    var tipoTxt=function(t){ return t=="frio"?"Congelado −18°":(t=="refri"?"Refrigerado":"Seco"); };
+    var cTxt=function(d){ var rp=+d.refriPct||0, fpc=+d.frioPct||0, sp=Math.max(0,100-rp-fpc); var p=[]; if(fpc)p.push(fpc+"% Congelado"); if(rp)p.push(rp+"% Refrig."); if(sp)p.push(sp+"% Seco"); if(p.length===1)return p[0].replace("100% ",""); return p.join(" · "); };
+    // ruta: origen → destinos → tramos → vuelta (al final)
     var salida=($("partidaDir").value||"").trim()||($("baseDir").value||"").trim()||"—";
-    var rt='<tr><td class="pt">Origen</td><td>'+esc(salida)+'</td></tr>';
-    destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td></tr>'; });
-    if(!soloIda) rt+='<tr><td class="pt">Vuelta</td><td>'+esc($("baseDir").value||"Base")+'</td></tr>';
-    else rt+='<tr><td class="pt">Modalidad</td><td>Solo ida</td></tr>';
-    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" → Base"))+'</td></tr>'; });
+    var rt='<tr><td class="pt">Origen</td><td>'+esc(salida)+'</td><td></td></tr>';
+    destinos.forEach(function(dd,i){ rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td><td>'+cTxt(dd)+'</td></tr>'; });
+    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" → Base"))+'</td><td>'+cTxt(t)+'</td></tr>'; });
+    if(!soloIda) rt+='<tr><td class="pt">Vuelta a base</td><td>'+esc($("baseDir").value||"Base")+'</td><td>'+(vEstado=="cargada"?tipoTxt(vTipo):"Vacía")+'</td></tr>';
+    else rt+='<tr><td class="pt">Modalidad</td><td>Solo ida</td><td></td></tr>';
     var cinfo="";
     if(cliente) cinfo+='<div><b>Cliente:</b> '+esc(cliente)+'</div>';
     if(cuit)    cinfo+='<div><b>CUIT / DNI:</b> '+esc(cuit)+'</div>';
@@ -607,10 +611,10 @@
       '<div class="phead"><div class="plogo">LAR</div><div><div class="ptitle">Cotización de transporte</div><div class="pmeta">LAR · Logística refrigerada</div></div><div class="pdate"><b>'+esc(cotizId)+'</b><br>'+hoy+'</div></div>'+
       (cinfo?'<div class="pcli">'+cinfo+'</div>':'')+
       '<div class="psec">Ruta</div>'+
-      '<table class="ptab"><tbody>'+rt+'</tbody></table>'+
-      '<div class="pserv"><span>Tipo de servicio</span><b>'+servicio+'</b></div>'+
-      '<div class="ptot"><span>Total</span><span>'+fmt(total)+'</span></div>'+
-      '<div class="pfoot">Cotización válida por '+validez+' días desde la fecha.<br>LAR · Transporte refrigerado</div>'+
+      '<table class="ptab"><thead><tr><th></th><th>Dirección</th><th>Servicio</th></tr></thead><tbody>'+rt+'</tbody></table>'+
+      '<div class="pserv"><span>Km totales</span><b>'+Q.kmTotal+' km</b></div>'+
+      '<div class="ptot"><span>Total <span style="font-size:12px;font-weight:600;opacity:.85">(IVA incluido)</span></span><span>'+fmt(total)+'</span></div>'+
+      '<div class="pfoot">Cotización válida por '+validez+' días desde la fecha.<br>LAR · Transporte refrigerado · Lanús, Provincia de Buenos Aires</div>'+
       '</div>';
     $("printArea").innerHTML=html;
     var oldTitle=document.title;
@@ -647,7 +651,7 @@
       base:$("baseDir").value||"", partida:$("partidaDir").value||"", soloIda:soloIda,
       destinos:destinos.map(function(d){ return {dir:d.dir,km:d.km,refriPct:d.refriPct,frioPct:d.frioPct,noche:d.noche,espera:d.espera}; }),
       vuelta:{km:num("vKm"),estado:vEstado,tipo:vTipo,noche:$("vNoche").checked,espera:$("vEspera").checked},
-      tramos:tramos.filter(function(t){return (t.origen||t.destino||t.km);}).map(function(t){ return {origen:t.origen,destino:t.destino,tipo:t.tipo,km:t.km,kmVacio:t.kmVacio,refriPct:t.refriPct,frioPct:t.frioPct}; }),
+      tramos:tramos.filter(function(t){return (t.origen||t.destino||t.km);}).map(function(t){ return {origen:t.origen,destino:t.destino,tipo:t.tipo,km:t.km,kmVacio:t.kmVacio,peaje:t.peaje,refriPct:t.refriPct,frioPct:t.frioPct}; }),
       extras:{peaje:num("peajeViaje"),paradasNoPrevistas:num("par")},
       precios:{piso:Q.piso,sugerido:Q.sugerido,final:num("finalPrice")||null},
       desglose:{base:Q.base,frio:Q.frio,backhaul:Q.backhaul,paradas:Q.paradasR,espera:Q.esperaR,noches:Q.nocheR,peaje:Q.peaje}
