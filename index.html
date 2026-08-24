@@ -195,6 +195,10 @@
       <label class="lab" for="mail">Mail</label>
       <input type="email" id="mail" placeholder="cliente@correo.com" autocomplete="off">
     </div>
+    <div class="field">
+      <label class="lab" for="condPago">Condici&oacute;n de pago</label>
+      <input type="text" id="condPago" value="Contado" autocomplete="off">
+    </div>
   </div>
 
   <div class="card">
@@ -588,6 +592,7 @@
     var cuit=($("cuit").value||"").trim();
     var tel=($("tel").value||"").trim();
     var mail=($("mail").value||"").trim();
+    var condPago=($("condPago").value||"").trim()||"Contado";
     var cotizId=cotLabel();
     var fp=num("finalPrice");
     var total=fp>0?fp:Q.sugerido;
@@ -613,6 +618,7 @@
       '<div class="psec">Ruta</div>'+
       '<table class="ptab"><thead><tr><th></th><th>Dirección</th><th>Km</th><th>Servicio</th></tr></thead><tbody>'+rt+'</tbody></table>'+
       '<div class="pserv"><span>Km totales</span><b>'+Q.kmTotal+' km</b></div>'+
+      '<div class="pserv"><span>Condición de pago</span><b>'+esc(condPago)+'</b></div>'+
       '<div class="ptot"><span>Total <span style="font-size:12px;font-weight:600;opacity:.85">(IVA incluido)</span></span><span>'+fmt(total)+'</span></div>'+
       '<div class="pfoot">Cotización válida por '+validez+' días desde la fecha.<br>LAR · Transporte refrigerado · Lanús, Provincia de Buenos Aires</div>'+
       '</div>';
@@ -648,6 +654,7 @@
     var anyFrio=destinos.some(function(d){return (+d.frioPct||0)>0;}) || tramos.some(function(t){return (+t.frioPct||0)>0;}) || (!soloIda&&vEstado=="cargada"&&vTipo=="frio");
     var anyEspera=destinos.some(function(d){return d.espera;}) || (!soloIda&&$("vEspera").checked);
     var detalle={
+      condPago:($("condPago").value||"Contado").trim()||"Contado",
       base:$("baseDir").value||"", partida:$("partidaDir").value||"", soloIda:soloIda,
       destinos:destinos.map(function(d){ return {dir:d.dir,km:d.km,refriPct:d.refriPct,frioPct:d.frioPct,noche:d.noche,espera:d.espera}; }),
       vuelta:{km:num("vKm"),estado:vEstado,tipo:vTipo,noche:$("vNoche").checked,espera:$("vEspera").checked},
@@ -662,6 +669,7 @@
     var R=[];
     R.push("Cliente: "+(_cli||"—")+"  |  CUIT/DNI: "+(_cuit||"—"));
     R.push("Tel: "+(_tel||"—")+"  |  Mail: "+(_mail||"—"));
+    R.push("Condición de pago: "+(($("condPago").value||"Contado").trim()||"Contado"));
     if(_fv) R.push("Fecha viaje: "+_fv);
     R.push("");
     R.push("RUTA");
@@ -720,7 +728,7 @@
     destinos=[nuevoDestino(0)]; tramos=[];
     saved=null; savedSig=null; currentRef=newRef(); lockDownload(true);
     var _c=$("cotIdBox"); if(_c) _c.textContent="Se asigna al guardar en Notion"; setSaveMsg("");
-    $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value=""; $("fechaViaje").value="";
+    $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value=""; $("fechaViaje").value=""; $("condPago").value="Contado";
     baseLL=null; partidaLL=null; baseName=""; partidaName="";
     $("baseDir").value="Carlos Pellegrini 3484, B1827 Lanús, Provincia de Buenos Aires"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
     $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
@@ -896,7 +904,7 @@
 
   currentRef=newRef();
   lockDownload(true);
-  ["cliente","cuit","tel","mail","fechaViaje"].forEach(function(id){ var el=$(id); if(el) el.addEventListener("input",touch); });
+  ["cliente","cuit","tel","mail","fechaViaje","condPago"].forEach(function(id){ var el=$(id); if(el) el.addEventListener("input",touch); });
   destinos=[nuevoDestino(0)];
   renderDestinos(); renderTramos();
 })();
