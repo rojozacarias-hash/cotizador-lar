@@ -866,15 +866,33 @@
     if(!ok){ setMsg("⚠️ Faltan direcciones de destino."); return; }
     var soloIda=$("soloIda").checked;
     if(!soloIda){ var bb=baseLL||($("baseDir").value||"").trim(); if(!bb){ setMsg("⚠️ Poné la dirección de la Base (para la vuelta)."); return; } pts.push(bb); }
-    var origins=pts.slice(0,pts.length-1), dests=pts.slice(1);
     setMsg("Calculando km…");
-    DM.getDistanceMatrix({origins:origins,destinations:dests,travelMode:TM}).then(function(res){
-      if(!res||!res.rows){ setMsg("No pude calcular la distancia."); return; }
-      for(var i=0;i<origins.length;i++){ var el=res.rows[i].elements[i]; if(!el||el.status!=="OK"){ setMsg("No encontré ruta en un tramo."); return; } var km=Math.round(el.distance.value/1000); if(i<destinos.length){ destinos[i].km=km; var inp=document.querySelector('#destinos input[data-f="km"][data-i="'+i+'"]'); if(inp) inp.value=km; } else $("vKm").value=km; }
+    getFullMatrix(pts).then(function(M){
+      for(var i=0;i<pts.length-1;i++){ var v=M[i][i+1]; if(!isFinite(v)){ setMsg("No encontré ruta en un tramo."); return; } var km=Math.round(v/1000); if(i<destinos.length){ destinos[i].km=km; var inp=document.querySelector('#destinos input[data-f="km"][data-i="'+i+'"]'); if(inp) inp.value=km; } else $("vKm").value=km; }
       setMsg("✅ Km calculados desde el mapa."); compute();
     }).catch(function(e){ setMsg("No pude calcular: "+(e.message||e)); });
   });
 
+  // matriz de distancias completa (metros), en lotes ≤100 elementos para no pasar el límite de Google
+  function getFullMatrix(pts){
+    var n=pts.length, M=[]; for(var i=0;i<n;i++){ var row=[]; for(var j=0;j<n;j++) row.push(Infinity); M.push(row); }
+    var reqs=[], maxOrig=10;
+    for(var oi=0; oi<n; oi+=maxOrig){
+      var oEnd=Math.min(oi+maxOrig,n), maxDest=Math.floor(100/(oEnd-oi));
+      for(var di=0; di<n; di+=maxDest){
+        var dEnd=Math.min(di+maxDest,n);
+        (function(oi,oEnd,di,dEnd){
+          reqs.push(new Promise(function(resolve){
+            DM.getDistanceMatrix({origins:pts.slice(oi,oEnd),destinations:pts.slice(di,dEnd),travelMode:TM}).then(function(res){
+              if(res&&res.rows){ for(var r=0;r<res.rows.length;r++){ var els=res.rows[r].elements; for(var c=0;c<els.length;c++){ var e=els[c]; M[oi+r][di+c]=(e&&e.status==="OK")?e.distance.value:Infinity; } } }
+              resolve();
+            }).catch(function(){ resolve(); });
+          }));
+        })(oi,oEnd,di,dEnd);
+      }
+    }
+    return Promise.all(reqs).then(function(){ return M; });
+  }
   // optimizar orden de destinos (minimiza km): matriz de distancias + TSP chico
   function permute(arr){ if(arr.length<=1) return [arr]; var out=[]; for(var i=0;i<arr.length;i++){ var rest=arr.slice(0,i).concat(arr.slice(i+1)); var sub=permute(rest); for(var j=0;j<sub.length;j++) out.push([arr[i]].concat(sub[j])); } return out; }
   $("optRoute").addEventListener("click", function(){
@@ -891,11 +909,9 @@
     var N=destinos.length;
     var pts=[partVal].concat(destPts); var idxEnd=-1;
     if(!soloIda){ pts.push(baseVal); idxEnd=pts.length-1; }
-    if(pts.length>10){ setMsg("Demasiados destinos para optimizar de una vez (máx 8-9)."); return; }
+    if(N>16){ setMsg("Demasiados destinos para optimizar de una vez (máx 16)."); return; }
     setMsg("Optimizando orden…");
-    DM.getDistanceMatrix({origins:pts,destinations:pts,travelMode:TM}).then(function(res){
-      if(!res||!res.rows){ setMsg("No pude optimizar."); return; }
-      var M=res.rows.map(function(row){ return row.elements.map(function(e){ return (e&&e.status==="OK")?e.distance.value:Infinity; }); });
+    getFullMatrix(pts).then(function(M){
       var idxs=[]; for(var i=1;i<=N;i++) idxs.push(i);
       function cost(order){ var c=M[0][order[0]]; for(var k=0;k<order.length-1;k++) c+=M[order[k]][order[k+1]]; if(idxEnd>=0) c+=M[order[order.length-1]][idxEnd]; return c; }
       var best=null, bestC=Infinity;
