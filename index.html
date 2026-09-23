@@ -239,6 +239,11 @@
     <button type="button" class="mapbtn" id="calcKm">🗺️ Calcular km con Google Maps</button>
     <button type="button" class="addbtn" id="optRoute" style="margin-top:8px">🔀 Optimizar orden de destinos</button>
     <div class="mapmsg" id="mapmsg"></div>
+    <div class="field" style="margin-top:14px">
+      <label class="lab" for="kmManual">Km manuales (ida y vuelta) <span style="color:var(--muted);font-weight:400">&mdash; opcional</span></label>
+      <input type="number" id="kmManual" inputmode="numeric" min="0" placeholder="Dej&aacute; vac&iacute;o para usar los del mapa">
+      <div class="base-note" style="margin-top:6px">&#9888;&#65039; Nota interna: si complet&aacute;s este campo, estos km se usan para cotizar <b>por sobre</b> los km calculados con las direcciones. Dejalo vac&iacute;o para usar el mapa.</div>
+    </div>
   </div>
 
   <div class="card vuelta" id="vueltaCard">
@@ -531,6 +536,9 @@
     tramos.forEach(function(t){
       var tk=+t.km||0, kv=+t.kmVacio||0; tramoKm+=tk+kv; loadedKm+=tk+kv; var tf=recargoMix(t,tk); tramoFrio+=tf; frio+=tf; tramoPeaje+=+t.peaje||0; tramoParadas+=+t.paradas||0;
     });
+    // override manual: si hay km cargados a mano, mandan por sobre los del mapa
+    var kmManual=num("kmManual");
+    if(kmManual>0) loadedKm=kmManual;
     var kmTotal=loadedKm+emptyKm;
 
     var b=$("badge");
@@ -594,7 +602,7 @@
     Q={ kmTotal:kmTotal, loadedKm:loadedKm, emptyKm:emptyKm, emptyCost:emptyCost, tramoKm:tramoKm, base:base, frio:frio, backhaul:backhaul, paradasR:paradasR, numParadas:numParadas, esperaR:esperaR, esperas:esperas, nocheR:nocheR, noches:noches, peaje:peaje, sugerido:sugerido, piso:piso };
 
     // firma del cálculo → si ya se guardó y algo cambió, re-bloquear la descarga
-    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.kmVacio,t.peaje,t.paradas,t.refriPct,t.frioPct];}));
+    var sig=kmTotal+"|"+sugerido+"|"+piso+"|"+num("finalPrice")+"|"+soloIda+"|"+num("vKm")+"|"+num("kmManual")+"|"+vEstado+"|"+vTipo+"|"+JSON.stringify(destinos.map(function(d){return [d.dir,d.km,d.refriPct,d.frioPct,d.noche,d.espera];}))+"|"+JSON.stringify(tramos.map(function(t){return [t.origen,t.destino,t.tipo,t.km,t.kmVacio,t.peaje,t.paradas,t.refriPct,t.frioPct];}));
     lastSig=sig;
     if(saved && sig!==savedSig) touch();
   }
@@ -744,7 +752,7 @@
       });
   }
 
-  ["baseDir","partidaDir","vKm","peajeViaje","par","finalPrice","p-min","p-km","p-corte","p-refri","p-frio","p-backhaul","p-noche","p-espera","p-parada-fijo","p-parada-km","p-gasoil","p-consumo","p-desgaste","p-chofer","p-fijos","p-comercial","p-viajes"].forEach(function(id){
+  ["baseDir","partidaDir","vKm","kmManual","peajeViaje","par","finalPrice","p-min","p-km","p-corte","p-refri","p-frio","p-backhaul","p-noche","p-espera","p-parada-fijo","p-parada-km","p-gasoil","p-consumo","p-desgaste","p-chofer","p-fijos","p-comercial","p-viajes"].forEach(function(id){
     $(id).addEventListener("input",compute); $(id).addEventListener("change",compute);
   });
 
@@ -762,7 +770,7 @@
     $("cliente").value=""; $("cuit").value=""; $("tel").value=""; $("mail").value=""; $("fechaViaje").value=""; $("condPago").value="Contado";
     baseLL=null; partidaLL=null; baseName=""; partidaName="";
     $("baseDir").value="Carlos Pellegrini 3484, B1827 Lanús, Provincia de Buenos Aires"; $("partidaDir").value=""; $("soloIda").checked=false; $("vueltaCard").classList.remove("off");
-    $("vKm").value=0; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
+    $("vKm").value=0; $("kmManual").value=""; vEstado="vacia"; vTipo="seco"; $("vTipoWrap").classList.add("hidden");
     Array.prototype.forEach.call($("vEstadoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="vacia"); });
     Array.prototype.forEach.call($("vTipoSeg").children,function(b){ b.classList.toggle("on",b.getAttribute("data-v")=="seco"); });
     $("vNoche").checked=false; $("vEspera").checked=false; $("vNocheChk").classList.remove("on"); $("vEsperaChk").classList.remove("on");
