@@ -638,7 +638,7 @@
     var salida=($("partidaDir").value||"").trim()||($("baseDir").value||"").trim()||"—";
     var rt='<tr><td class="pt">Origen</td><td>'+esc(salida)+'</td><td></td><td></td></tr>';
     destinos.forEach(function(dd,i){ var extra=(dd.noche?" · Pernocte":"")+(dd.espera?" · Espera":""); rt+='<tr><td class="pt">Destino '+(i+1)+'</td><td>'+esc(dd.dir||"—")+'</td><td>'+(dd.km||0)+' km</td><td>'+cTxt(dd)+extra+'</td></tr>'; });
-    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" → Base"))+'</td><td>'+(t.km||0)+' km</td><td>'+cTxt(t)+'</td></tr>'; });
+    tramos.forEach(function(t,i){ if(!(t.origen||t.destino)) return; var o=t.placeOrigen||firstChunk(t.origen)||"—"; var dd=t.placeDestino||firstChunk(t.destino)||"—"; rt+='<tr><td class="pt">Tramo '+(i+1)+'</td><td>'+esc(o+" → "+dd+(t.tipo=="solo"?" (solo ida)":" → Base"))+'</td><td></td><td>'+cTxt(t)+'</td></tr>'; });
     if(soloIda) rt+='<tr><td class="pt">Modalidad</td><td>Solo ida</td><td></td><td></td></tr>';
     var cinfo='<div><b>Cliente:</b> '+esc(cliente||"—")+'</div>'+
       '<div><b>CUIT / DNI:</b> '+esc(cuit||"—")+'</div>'+
